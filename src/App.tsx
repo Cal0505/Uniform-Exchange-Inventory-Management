@@ -44,10 +44,15 @@ export default function App() {
   };
 
   const handleSignOut = () => {
-    localStorage.removeItem('ue_session');
-    setEmailInput(''); passwordInput(''); setUserRole('');
-    setShowUserDropdown(false); setIsLoggedIn(false);
+    localStorage.clear();              // Completely clear the browser's memory vault
+    setEmailInput('');                 // Erase your typed email string
+    setPasswordInput('');              // Erase your typed password string
+    setUserRole('');                   // Erase your 'Dev' rank assignment
+    setShowUserDropdown(false);        // Close the visual dropdown panel container
+    setIsLoggedIn(false);              // Shut down the main warehouse dashboard view
+    window.location.reload();          // Force the web browser tab to instantly reload fresh
   };
+
 
   const handleSendMessage = async () => {
     if (!contactMessage.trim()) return;
