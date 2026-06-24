@@ -1,0 +1,110 @@
+{
+  "entities": {
+    "School": {
+      "title": "School Mapping",
+      "description": "School alphanumeric metadata mapping",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "skuCode": { "type": "string" }
+      },
+      "required": ["id", "name", "skuCode"]
+    },
+    "ClothingType": {
+      "title": "Clothing Type Mapping",
+      "description": "Uniform garment type alphanumeric metadata mapping",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "skuCode": { "type": "string" }
+      },
+      "required": ["id", "name", "skuCode"]
+    },
+    "Size": {
+      "title": "Size Mapping",
+      "description": "Uniform size labels and alphanumeric codes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "skuCode": { "type": "string" }
+      },
+      "required": ["id", "label", "skuCode"]
+    },
+    "Colour": {
+      "title": "Colour Mapping",
+      "description": "Uniform colour labels and alphanumeric codes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "skuCode": { "type": "string" }
+      },
+      "required": ["id", "name", "skuCode"]
+    },
+    "Location": {
+      "title": "Storage Location Mapping",
+      "description": "Warehouse physical zones and rule profiles",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "skuCode": { "type": "string" },
+        "ruleProfile": { "type": "string", "enum": ["Pickers Shelf", "VacPac Storage Area"] }
+      },
+      "required": ["id", "name", "skuCode", "ruleProfile"]
+    },
+    "InventoryItem": {
+      "title": "Inventory Item",
+      "description": "Physical stock item represented as loose singles or vacuum packed bulk",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "skuid": { "type": "string" },
+        "type": { "type": "string", "enum": ["single", "vacpac"] },
+        "locationId": { "type": "string" },
+        "locationSku": { "type": "string" },
+        "shelfCode": { "type": "string" },
+        "packNumber": { "type": "number" },
+        "schoolId": { "type": "string" },
+        "schoolSku": { "type": "string" },
+        "colourId": { "type": "string" },
+        "colourSku": { "type": "string" },
+        "typeId": { "type": "string" },
+        "typeSku": { "type": "string" },
+        "sizeId": { "type": "string" },
+        "sizeSku": { "type": "string" },
+        "quantity": { "type": "number" }
+      },
+      "required": ["id", "skuid", "type", "locationId", "locationSku", "schoolId", "schoolSku", "colourId", "colourSku", "typeId", "typeSku", "sizeId", "sizeSku", "quantity"]
+    }
+  },
+  "firestore": {
+    "/schools/{schoolId}": {
+      "schema": "School",
+      "description": "Collection of schools mapped to code"
+    },
+    "/clothingTypes/{typeId}": {
+      "schema": "ClothingType",
+      "description": "Collection of garment types mapped to code"
+    },
+    "/sizes/{sizeId}": {
+      "schema": "Size",
+      "description": "Collection of sizes mapped to code"
+    },
+    "/colours/{colourId}": {
+      "schema": "Colour",
+      "description": "Collection of colours mapped to code"
+    },
+    "/locations/{locationId}": {
+      "schema": "Location",
+      "description": "Collection of locations and their warehouse profile"
+    },
+    "/inventory/{itemId}": {
+      "schema": "InventoryItem",
+      "description": "Live real-time physical inventory stock"
+    }
+  }
+}

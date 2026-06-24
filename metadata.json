@@ -1,0 +1,6 @@
+{
+  "name": "School Uniform Inventory Management",
+  "description": "A real-time school uniform inventory tracking and management system with live stock tracking, bulk VacPac storage, and picker restock workflows.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
