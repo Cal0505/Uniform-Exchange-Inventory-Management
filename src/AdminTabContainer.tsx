@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import AdminPanel from './components/AdminPanel';
+import UserManagement from './UserManagement'; // Import our new user directory table
 import { School, ClothingType, Size, Colour, Location, Category, ItemType } from './types';
+import { Users, Sliders } from 'lucide-react';
 
 interface AdminTabContainerProps {
   schools: School[];
@@ -21,15 +23,54 @@ export default function AdminTabContainer({
   categories,
   itemTypes
 }: AdminTabContainerProps) {
+  // Toggle sub-tabs inside the Admin Panel workspace area
+  const [subTab, setSubTab] = useState<'users' | 'metadata'>('users');
+
   return (
-    <AdminPanel 
-      schools={schools}
-      clothingTypes={clothingTypes}
-      sizes={sizes}
-      colours={colours}
-      locations={locations}
-      categories={categories}
-      itemTypes={itemTypes}
-    />
+    <div className="space-y-6">
+      {/* INTERNAL SUB-NAVIGATION BUTTONS */}
+      <div className="flex border-b border-slate-200 gap-6">
+        <button
+          onClick={() => setSubTab('users')}
+          className={`pb-2 text-sm font-bold border-b-2 transition-all flex items-center gap-1.5 ${
+            subTab === 'users'
+              ? 'border-blue-600 text-blue-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-900 font-semibold'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>Manage Staff Access</span>
+        </button>
+
+        <button
+          onClick={() => setSubTab('metadata')}
+          className={`pb-2 text-sm font-bold border-b-2 transition-all flex items-center gap-1.5 ${
+            subTab === 'metadata'
+              ? 'border-blue-600 text-blue-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-900 font-semibold'
+          }`}
+        >
+          <Sliders className="w-4 h-4" />
+          <span>Stock Configuration Attributes</span>
+        </button>
+      </div>
+
+      {/* CONDITIONAL RENDER PANELS */}
+      <div className="pt-2">
+        {subTab === 'users' ? (
+          <UserManagement />
+        ) : (
+          <AdminPanel 
+            schools={schools}
+            clothingTypes={clothingTypes}
+            sizes={sizes}
+            colours={colours}
+            locations={locations}
+            categories={categories}
+            itemTypes={itemTypes}
+          />
+        )}
+      </div>
+    </div>
   );
 }
