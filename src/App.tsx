@@ -37,12 +37,12 @@ export default function App() {
     }
   }, []);
 
-  // UPDATED LOGIN FLOW: CRITICAL STALE CODE REMOVED
+  // UPGRADED LOGIN ROUTER: SMART STATUS LOOKUPS FOR UNAPPROVED USERS
   const handleLogin = async () => {
     setLoginError('');
     const cleanEmail = emailInput.trim().toLowerCase();
 
-    // 1. Backdoor Master Dev check
+    // 1. Backdoor Master Dev validation
     if (cleanEmail === 'carlhurles28@gmail.com' && passwordInput === 'J4sp3r#M1sty') {
       setUserRole('Dev');
       setLoggedInEmail('carlhurles28@gmail.com');
@@ -51,40 +51,45 @@ export default function App() {
       return;
     }
 
-    // 2. Main Live Registry verification check
     try {
       const { query, where, getDocs } = await import('firebase/firestore');
-      const q = query(collection(db, 'users'), where('email', '==', cleanEmail));
-      const querySnapshot = await getDocs(q);
+      
+      // 2. Main Active Users Table Check
+      const userQuery = query(collection(db, 'users'), where('email', '==', cleanEmail));
+      const userSnapshot = await getDocs(userQuery);
 
-      // If their record isn't in the active users table yet, show your custom message
-      if (querySnapshot.empty) {
-        setLoginError('Your account request has not been processed yet.');
+      if (!userSnapshot.empty) {
+        const userData = userSnapshot.docs[0].data();
+
+        if (!userData.active) {
+          setLoginError('Your staff account access has been suspended by an administrator.');
+          return;
+        }
+
+        if (userData.password === passwordInput) {
+          setUserRole(userData.role || 'User');
+          setLoggedInEmail(cleanEmail);
+          setIsLoggedIn(true);
+          localStorage.setItem('ue_session', JSON.stringify({ 
+            role: userData.role || 'User', email: cleanEmail, timestamp: Date.now() 
+          }));
+        } else {
+          setLoginError('Invalid password. Please try again.');
+        }
         return;
       }
 
-      const userDoc = querySnapshot.docs[0];
-      const userData = userDoc.data();
+      // 3. SMART CHECK: If email isn't an active user, check if they are in pending requests pool
+      const reqQuery = query(collection(db, 'user_requests'), where('email', '==', cleanEmail), where('status', '==', 'pending'));
+      const reqSnapshot = await getDocs(reqQuery);
 
-      if (!userData.active) {
-        setLoginError('Your staff account access has been suspended by an administrator.');
-        return;
-      }
-
-      // FIXED: Old "Not Activated" text completely wiped out here.
-      // Verify the password they selected when they originally filled out the request.
-      if (userData.password === passwordInput) {
-        setUserRole(userData.role || 'User');
-        setLoggedInEmail(cleanEmail);
-        setIsLoggedIn(true);
-        localStorage.setItem('ue_session', JSON.stringify({ 
-          role: userData.role || 'User', 
-          email: cleanEmail,
-          timestamp: Date.now() 
-        }));
+      if (!reqSnapshot.empty) {
+        setLoginError('Your account request is still Pending. Try again later or send an additional message to the Dev team below.');
+        setShowContactForm(true); // Automatically expand message drawer for convenience
       } else {
-        setLoginError('Invalid password. Please try again.');
+        setLoginError('No request found for this email. Please click "New Staff Member" below to submit an official access request.');
       }
+
     } catch (err) {
       console.error('Login error:', err);
       setLoginError('Database connection failed. Please try again later.');
