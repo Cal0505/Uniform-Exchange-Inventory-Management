@@ -11,7 +11,7 @@ import { Layers, Settings, RefreshCw, Clock, Shirt, User, LogOut, ChevronDown, U
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userRole, setUserRole] = useState<string>('');
-  const [loggedInEmail, setLoggedInEmail] = useState<string>(''); // Dynamic profile header tracker
+  const [loggedInEmail, setLoggedInEmail] = useState<string>(''); 
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -37,11 +37,12 @@ export default function App() {
     }
   }, []);
 
+  // UPDATED LOGIN FLOW: NO MORE ACTIVATION NEEDED
   const handleLogin = async () => {
     setLoginError('');
     const cleanEmail = emailInput.trim().toLowerCase();
 
-    // 1. Check developer master credentials
+    // 1. Backdoor Master Dev check
     if (cleanEmail === 'carlhurles28@gmail.com' && passwordInput === 'J4sp3r#M1sty') {
       setUserRole('Dev');
       setLoggedInEmail('carlhurles28@gmail.com');
@@ -50,14 +51,15 @@ export default function App() {
       return;
     }
 
-    // 2. Query Firestore users registry
+    // 2. Main Live Registry verification check
     try {
       const { query, where, getDocs } = await import('firebase/firestore');
       const q = query(collection(db, 'users'), where('email', '==', cleanEmail));
       const querySnapshot = await getDocs(q);
 
+      // If their record isn't in the active users table yet, show your custom message
       if (querySnapshot.empty) {
-        setLoginError('No approved account found with this email address.');
+        setLoginError('Your account request has not been processed yet.');
         return;
       }
 
@@ -69,11 +71,7 @@ export default function App() {
         return;
       }
 
-      if (!userData.password) {
-        setLoginError('Account approved but not activated. Please click the First-Time Activation link below.');
-        return;
-      }
-
+      // Verify the password they selected when they originally filled out the request
       if (userData.password === passwordInput) {
         setUserRole(userData.role || 'User');
         setLoggedInEmail(cleanEmail);
@@ -94,12 +92,8 @@ export default function App() {
 
   const handleSignOut = () => {
     localStorage.clear();              
-    setEmailInput('');                 
-    setPasswordInput('');              
-    setUserRole('');                   
-    setLoggedInEmail('');
-    setShowUserDropdown(false);        
-    setIsLoggedIn(false);              
+    setEmailInput(''); passwordInput(''); setUserRole(''); setLoggedInEmail('');
+    setShowUserDropdown(false); setIsLoggedIn(false);              
     setTimeout(() => { window.location.reload(); }, 100);
   };
 
@@ -149,12 +143,10 @@ export default function App() {
               <Clock className="w-3.5 h-3.5 text-slate-400" /><span>UTC Workspace</span>
             </div>
             
-            {/* DYNAMIC PROFILE DROPDOWN MENU */}
             <div className="relative">
               <button onClick={() => setShowUserDropdown(!showUserDropdown)} className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-medium transition-all group">
                 <User className="w-3.5 h-3.5 text-slate-500" />
                 <div className="flex flex-col items-start text-left leading-tight">
-                  {/* FIXED: This now displays the active user's actual email variable */}
                   <span className="font-semibold text-slate-800">{loggedInEmail}</span>
                   <span className="text-[10px] text-blue-600 font-bold mt-0.5">Logged in as: {userRole}</span>
                 </div>
@@ -211,3 +203,4 @@ export default function App() {
     </div>
   );
 }
+
