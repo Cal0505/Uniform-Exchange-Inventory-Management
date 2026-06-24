@@ -144,12 +144,11 @@ export default function App() {
     };
   }, []);
 
-  // 1. IF USER IS NOT LOGGED IN, SHOW LOGIN BOX INTERFACE
+  // IF USER IS NOT LOGGED IN, SHOW LOGIN BOX INTERFACE
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6 font-sans">
         <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-100">
-          
           <div className="flex flex-col items-center gap-3 mb-6">
             <div className="p-3 bg-blue-600 text-white rounded-xl shadow-md">
               <Shirt className="w-8 h-8 text-white" />
@@ -161,62 +160,35 @@ export default function App() {
               Please enter your credentials to access the stock manager
             </p>
           </div>
-
           <div className="space-y-4">
             <div>
               <label className="block mb-1 text-sm font-semibold text-slate-700">Email Address</label>
-              <input 
-                type="email" 
-                placeholder="enter your email" 
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" 
-              />
+              <input type="email" placeholder="enter your email" className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" />
             </div>
-            
             <div>
               <label className="block mb-1 text-sm font-semibold text-slate-700">Password</label>
-              <input 
-                type="password" 
-                placeholder="••••••••" 
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" 
-              />
+              <input type="password" placeholder="••••••••" className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" />
             </div>
-
-            <button 
-              onClick={() => setIsLoggedIn(true)} 
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-md shadow-blue-500/10"
-            >
+            <button onClick={() => setIsLoggedIn(true)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-md shadow-blue-500/10">
               Sign In
             </button>
-
-            <button 
-              onClick={() => setShowContactForm(!showContactForm)} 
-              className="w-full text-center text-xs font-semibold text-blue-600 hover:text-blue-700 mt-2 block transition-all"
-            >
+            <button onClick={() => setShowContactForm(!showContactForm)} className="w-full text-center text-xs font-semibold text-blue-600 hover:text-blue-700 mt-2 block transition-all">
               Trouble logging in? Message the dev team
             </button>
-
             {showContactForm && (
               <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
-                <textarea 
-                  placeholder="Type your message to the admin team here..." 
-                  className="w-full h-20 p-3 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-500 bg-slate-50" 
-                />
-                <button 
-                  onClick={() => alert('Message sent!')} 
-                  className="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold rounded-xl text-xs transition-all"
-                >
+                <textarea placeholder="Type your message to the admin team here..." className="w-full h-20 p-3 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-500 bg-slate-50" />
+                <button onClick={() => alert('Message sent!')} className="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold rounded-xl text-xs transition-all">
                   Send Message
                 </button>
               </div>
             )}
           </div>
-
         </div>
       </div>
     );
   }
-
-  // 2. IF USER IS LOGGED IN, RENDER THE ACTUAL WORKSPACE DASHBOARD
+  // IF USER IS LOGGED IN, RENDER THE ACTUAL WORKSPACE DASHBOARD
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans antialiased">
       {/* GLOBAL UTILITY HEADER */}
@@ -249,3 +221,79 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-medium">
+              <User className="w-3.5 h-3.5 text-slate-400" />
+              <span>carlhurles28@gmail.com</span>
+            </div>
+
+            <button
+              onClick={() => window.location.reload()}
+              className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all"
+              title="Force sync database"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* PRIMARY NAVIGATION TABS */}
+      <nav className="bg-white border-b border-slate-100 px-6 py-2">
+        <div className="max-w-7xl mx-auto flex gap-4">
+          <button
+            id="nav-workspace-tab"
+            onClick={() => setActiveTab('workspace')}
+            className={`pb-3 pt-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+              activeTab === 'workspace'
+                ? 'border-primary text-primary font-bold'
+                : 'border-transparent text-slate-500 hover:text-slate-900 font-semibold'
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            <span>Workspace Dashboard</span>
+          </button>
+
+          <button
+            id="nav-admin-tab"
+            onClick={() => setActiveTab('admin')}
+            className={`pb-3 pt-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+              activeTab === 'admin'
+                ? 'border-primary text-primary font-bold'
+                : 'border-transparent text-slate-500 hover:text-slate-900 font-semibold'
+            }`}
+          >
+            <Settings className="w-4 h-4" />
+            <span>Admin Panel</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* RENDER ACTIVE TAB */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-6">
+        {activeTab === 'workspace' ? (
+          <InventoryWorkspace 
+            schools={schools}
+            clothingTypes={clothingTypes}
+            sizes={sizes}
+            colours={colours}
+            locations={locations}
+            categories={categories}
+            itemTypes={itemTypes}
+            inventory={inventory}
+            loading={loading}
+            seeding={seeding}
+          />
+        ) : (
+          <AdminPanel 
+            schools={schools}
+            clothingTypes={clothingTypes}
+            sizes={sizes}
+            colours={colours}
+            locations={locations}
+            categories={categories}
+            itemTypes={itemTypes}
+          />
+        )}
+      </main>
+    </div>
+  );
+}
