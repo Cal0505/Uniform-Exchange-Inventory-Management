@@ -1,409 +1,128 @@
 import React, { useState, useEffect } from 'react';
-import { db, handleFirestoreError, OperationType } from './firebase';
-import { collection, onSnapshot, query, addDoc, serverTimestamp } from 'firebase/firestore';
-import { seedDatabaseIfEmpty } from './seeder';
-import { School, ClothingType, Size, Colour, Location, InventoryItem, Category, ItemType } from './types';
-import AdminPanel from './components/AdminPanel';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from './firebase';
 import InventoryWorkspace from './components/InventoryWorkspace';
-import {
-  Sparkles,
-  Settings,
-  Layers,
-  Database,
-  RefreshCw,
-  Clock,
-  Shirt,
-  User,
-  ExternalLink,
-  Eye,
-  EyeOff
-} from 'lucide-react';
+import LoginScreen from './LoginScreen'; 
+import AdminTabContainer from './AdminTabContainer'; 
+import { useFirestoreData } from './useFirestoreData'; // Import our new background database hook
+import { Layers, Settings, RefreshCw, Clock, Shirt, User, LogOut, ChevronDown } from 'lucide-react';
 
 export default function App() {
-  // Authentication states
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userRole, setUserRole] = useState<string>('');
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
-  const [showPassword, setShowPassword] = useState(false); // Eye icon state
-  
-  // Contact form states
+  const [showPassword, setShowPassword] = useState(false);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showContactForm, setShowContactForm] = useState(false);
   const [contactMessage, setContactMessage] = useState('');
-
-  // UI Navigation tabs
   const [activeTab, setActiveTab] = useState<'workspace' | 'admin'>('workspace');
-  const [loading, setLoading] = useState(true);
-  const [seeding, setSeeding] = useState(false);
 
-  // States for live synchronized metadata
-  const [schools, setSchools] = useState<School[]>([]);
-  const [clothingTypes, setClothingTypes] = useState<ClothingType[]>([]);
-  const [sizes, setSizes] = useState<Size[]>([]);
-  const [colours, setColours] = useState<Colour[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [itemTypes, setItemTypes] = useState<ItemType[]>([]);
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  // Fetch all 8 database states instantly from our background file
+  const { schools, clothingTypes, sizes, colours, locations, categories, itemTypes, inventory, loading, seeding } = useFirestoreData();
 
-  // 15-MINUTE PERSISTENCE CHECK ON APP START
   useEffect(() => {
     const savedLoginStr = localStorage.getItem('ue_session');
     if (savedLoginStr) {
       try {
         const session = JSON.parse(savedLoginStr);
-        const now = Date.now();
-        const fifteenMinutes = 15 * 60 * 1000;
-        
-        // If current time minus login time is less than 15 mins, restore session
-        if (now - session.timestamp < fifteenMinutes) {
+        if (Date.now() - session.timestamp < 15 * 60 * 1000) {
           setUserRole(session.role);
           setIsLoggedIn(true);
-        } else {
-          // Expired session - clean up browser memory
-          localStorage.removeItem('ue_session');
-        }
-      } catch (e) {
-        console.error('Session restore failed:', e);
-      }
+        } else { localStorage.removeItem('ue_session'); }
+      } catch (e) { console.error('Session failed:', e); }
     }
   }, []);
 
-  // Seed database if empty on component mount
-  useEffect(() => {
-    const runSeeder = async () => {
-      setSeeding(true);
-      try {
-        await seedDatabaseIfEmpty();
-      } catch (err) {
-        console.error('Error running seeder:', err);
-      } finally {
-        setSeeding(false);
-      }
-    };
-    runSeeder();
-  }, []);
-
-  // Listen for real-time changes in Firestore collections
-  useEffect(() => {
-    const unsubSchools = onSnapshot(collection(db, 'schools'), (snapshot) => {
-      const items: School[] = [];
-      snapshot.forEach((doc) => {
-        items.push({ id: doc.id, ...doc.data() } as School);
-      });
-      setSchools(items.sort((a, b) => a.name.localeCompare(b.name)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'schools');
-    });
-
-    const unsubTypes = onSnapshot(collection(db, 'clothingTypes'), (snapshot) => {
-      const items: ClothingType[] = [];
-      snapshot.forEach((doc) => {
-        items.push({ id: doc.id, ...doc.data() } as ClothingType);
-      });
-      setClothingTypes(items.sort((a, b) => a.name.localeCompare(b.name)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'clothingTypes');
-    });
-
-    const unsubSizes = onSnapshot(collection(db, 'sizes'), (snapshot) => {
-      const items: Size[] = [];
-      snapshot.forEach((doc) => {
-        items.push({ id: doc.id, ...doc.data() } as Size);
-      });
-      setSizes(items);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'sizes');
-    });
-
-    const unsubColours = onSnapshot(collection(db, 'colours'), (snapshot) => {
-      const items: Colour[] = [];
-      snapshot.forEach((doc) => {
-        items.push({ id: doc.id, ...doc.data() } as Colour);
-      });
-      setColours(items.sort((a, b) => a.name.localeCompare(b.name)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'colours');
-    });
-
-    const unsubLocations = onSnapshot(collection(db, 'locations'), (snapshot) => {
-      const items: Location[] = [];
-      snapshot.forEach((doc) => {
-        items.push({ id: doc.id, ...doc.data() } as Location);
-      });
-      setLocations(items.sort((a, b) => a.name.localeCompare(b.name)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'locations');
-    });
-
-    const unsubCategories = onSnapshot(collection(db, 'categories'), (snapshot) => {
-      const items: Category[] = [];
-      snapshot.forEach((doc) => {
-        items.push({ id: doc.id, ...doc.data() } as Category);
-      });
-      setCategories(items.sort((a, b) => a.name.localeCompare(b.name)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'categories');
-    });
-
-    const unsubItemTypes = onSnapshot(collection(db, 'itemTypes'), (snapshot) => {
-      const items: ItemType[] = [];
-      snapshot.forEach((doc) => {
-        items.push({ id: doc.id, ...doc.data() } as ItemType);
-      });
-      setItemTypes(items.sort((a, b) => a.name.localeCompare(b.name)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'itemTypes');
-    });
-
-    const unsubInventory = onSnapshot(collection(db, 'inventory'), (snapshot) => {
-      const items: InventoryItem[] = [];
-      snapshot.forEach((doc) => {
-        items.push({ id: doc.id, ...doc.data() } as InventoryItem);
-      });
-      setInventory(items);
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'inventory');
-    });
-
-    return () => {
-      unsubSchools();
-      unsubTypes();
-      unsubSizes();
-      unsubColours();
-      unsubLocations();
-      unsubCategories();
-      unsubItemTypes();
-      unsubInventory();
-    };
-  }, []);
-
-  // MASTER ACTION: VALIDATE THE TYPED LOGINS & SAVE TIME TO MEMORY
   const handleLogin = () => {
     setLoginError('');
-    
     if (emailInput.trim() === 'carlhurles28@gmail.com' && passwordInput === 'J4sp3r#M1sty') {
-      setUserRole('Dev');
-      setIsLoggedIn(true);
-      
-      // Save current login details and dynamic time tag to localStorage
-      const sessionData = {
-        role: 'Dev',
-        timestamp: Date.now()
-      };
-      localStorage.setItem('ue_session', JSON.stringify(sessionData));
-    } else {
-      setLoginError('Invalid email address or password. Access denied.');
-    }
+      setUserRole('Dev'); setIsLoggedIn(true);
+      localStorage.setItem('ue_session', JSON.stringify({ role: 'Dev', timestamp: Date.now() }));
+    } else { setLoginError('Invalid email address or password. Access denied.'); }
   };
 
-  // REAL FIRESTORE ACTION: SAVE THE TICKET MESSAGE DIRECTLY TO GOOGLE CLOUD
+  const handleSignOut = () => {
+    localStorage.removeItem('ue_session');
+    setEmailInput(''); passwordInput(''); setUserRole('');
+    setShowUserDropdown(false); setIsLoggedIn(false);
+  };
+
   const handleSendMessage = async () => {
     if (!contactMessage.trim()) return;
     try {
       await addDoc(collection(db, 'developer_tickets'), {
         senderEmail: emailInput.trim() || 'anonymous@user.com',
         message: contactMessage.trim(),
-        timestamp: serverTimestamp(),
-        status: 'pending'
+        timestamp: serverTimestamp(), status: 'pending'
       });
       alert('Your message was successfully sent straight to the developer database!');
-    } catch (err) {
-      console.error('Error logging support ticket:', err);
-      alert('Could not save to database. Ticket logged locally instead.');
-    }
-    setContactMessage('');
-    setShowContactForm(false);
+    } catch (err) { alert('Could not save message to database.'); }
+    setContactMessage(''); setShowContactForm(false);
   };
-  // IF USER IS NOT LOGGED IN, SHOW THE MUTATED LOGIN BLOCK INTERFACE
+
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6 font-sans">
-        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-100">
-          <div className="flex flex-col items-center gap-3 mb-6">
-            <div className="p-3 bg-blue-600 text-white rounded-xl shadow-md">
-              <Shirt className="w-8 h-8 text-white" />
-            </div>
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight text-center">
-              Uniform Exchange Sign In
-            </h2>
-            <p className="text-xs text-slate-500 text-center">
-              Please enter your credentials to access the stock manager
-            </p>
-          </div>
-          
-          <div className="space-y-4">
-            {loginError && (
-              <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs font-semibold text-red-600">
-                {loginError}
-              </div>
-            )}
-            <div>
-              <label className="block mb-1 text-sm font-semibold text-slate-700">Email Address</label>
-              <input 
-                type="email" 
-                value={emailInput}
-                onChange={(e) => setEmailInput(e.target.value)}
-                placeholder="enter your email" 
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 text-slate-900" 
-              />
-            </div>
-            <div>
-              <label className="block mb-1 text-sm font-semibold text-slate-700">Password</label>
-              <div className="relative">
-                <input 
-                  type={showPassword ? 'text' : 'password'} 
-                  value={passwordInput}
-                  onChange={(e) => setPasswordInput(e.target.value)}
-                  placeholder="••••••••" 
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 text-slate-900 pr-10" 
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-            <button 
-              onClick={handleLogin} 
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-md shadow-blue-500/10"
-            >
-              Sign In
-            </button>
-            <button onClick={() => setShowContactForm(!showContactForm)} className="w-full text-center text-xs font-semibold text-blue-600 hover:text-blue-700 mt-2 block transition-all">
-              Trouble logging in? Message the dev team
-            </button>
-            {showContactForm && (
-              <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
-                <textarea 
-                  value={contactMessage}
-                  onChange={(e) => setContactMessage(e.target.value)}
-                  placeholder="Type your message to the admin team here..." 
-                  className="w-full h-20 p-3 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-500 bg-slate-50 text-slate-900" 
-                />
-                <button 
-                  onClick={handleSendMessage} 
-                  className="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold rounded-xl text-xs transition-all"
-                >
-                  Send Message
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <LoginScreen 
+        emailInput={emailInput} setEmailInput={setEmailInput}
+        passwordInput={passwordInput} setPasswordInput={setPasswordInput}
+        loginError={loginError} showPassword={showPassword} setShowPassword={setShowPassword}
+        handleLogin={handleLogin} showContactForm={showContactForm} setShowContactForm={setShowContactForm}
+        contactMessage={contactMessage} setContactMessage={setContactMessage}
+        handleSendMessage={handleSendMessage}
+      />
     );
   }
 
-  // IF USER IS LOGGED IN, RENDER THE ACTUAL WORKSPACE DASHBOARD
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans antialiased">
-      {/* GLOBAL UTILITY HEADER */}
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans antialiased text-slate-900">
       <header className="bg-white border-b border-slate-100 px-6 py-4 sticky top-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          
-          {/* BRAND NAME */}
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-primary text-white rounded-xl shadow-md shadow-primary/10">
-              <Shirt className="w-6 h-6 text-white" />
-            </div>
+            <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-md"><Shirt className="w-6 h-6 text-white" /></div>
             <div>
               <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-1.5">
                 School Uniform Exchange
-                <span className="text-[10px] uppercase tracking-widest bg-secondary/10 text-secondary px-2 py-0.5 rounded font-extrabold animate-pulse">
-                  Live {userRole === 'Dev' ? 'Master Access' : 'Firestore'}
-                </span>
+                <span className="text-[10px] uppercase tracking-widest bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-extrabold animate-pulse">Live Master Access</span>
               </h1>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Kirklees & Beyond Warehouse Stock Manager — Logged in as: <span className="font-semibold text-blue-600">{userRole}</span>
-              </p>
+              <p className="text-xs text-slate-500 mt-0.5">Kirklees & Beyond Warehouse Stock Manager</p>
             </div>
           </div>
-
-          {/* APP STATUS BAR */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-medium">
-              <Clock className="w-3.5 h-3.5 text-slate-400" />
-              <span>UTC Workspace</span>
+              <Clock className="w-3.5 h-3.5 text-slate-400" /><span>UTC Workspace</span>
             </div>
-
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-medium">
-              <User className="w-3.5 h-3.5 text-slate-400" />
-              <span>carlhurles28@gmail.com</span>
+            <div className="relative">
+              <button onClick={() => setShowUserDropdown(!showUserDropdown)} className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-medium transition-all group">
+                <User className="w-3.5 h-3.5 text-slate-500" />
+                <div className="flex flex-col items-start text-left leading-tight">
+                  <span className="font-semibold text-slate-800">carlhurles28@gmail.com</span>
+                  <span className="text-[10px] text-blue-600 font-bold mt-0.5">Logged in as: {userRole}</span>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              </button>
+              {showUserDropdown && (
+                <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-100 rounded-xl shadow-lg py-1 z-50">
+                  <button onClick={handleSignOut} className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-xs font-semibold text-red-600 hover:bg-red-50 transition-all"><LogOut className="w-3.5 h-3.5" /><span>Sign Out</span></button>
+                </div>
+              )}
             </div>
-
-            <button
-              onClick={() => window.location.reload()}
-              className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all"
-              title="Force sync database"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
+            <button onClick={() => window.location.reload()} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all"><RefreshCw className="w-4 h-4" /></button>
           </div>
         </div>
       </header>
-
-      {/* PRIMARY NAVIGATION TABS */}
       <nav className="bg-white border-b border-slate-100 px-6 py-2">
         <div className="max-w-7xl mx-auto flex gap-4">
-          <button
-            id="nav-workspace-tab"
-            onClick={() => setActiveTab('workspace')}
-            className={`pb-3 pt-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
-              activeTab === 'workspace'
-                ? 'border-primary text-primary font-bold'
-                : 'border-transparent text-slate-500 hover:text-slate-900 font-semibold'
-            }`}
-          >
-            <Layers className="w-4 h-4" />
-            <span>Workspace Dashboard</span>
-          </button>
-
-          <button
-            id="nav-admin-tab"
-            onClick={() => setActiveTab('admin')}
-            className={`pb-3 pt-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
-              activeTab === 'admin'
-                ? 'border-primary text-primary font-bold'
-                : 'border-transparent text-slate-500 hover:text-slate-900 font-semibold'
-            }`}
-          >
-            <Settings className="w-4 h-4" />
-            <span>Admin Panel</span>
-          </button>
+          <button onClick={() => setActiveTab('workspace')} className={`pb-3 pt-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'workspace' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}><Layers className="w-4 h-4" /><span>Workspace Dashboard</span></button>
+          <button onClick={() => setActiveTab('admin')} className={`pb-3 pt-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'admin' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}><Settings className="w-4 h-4" /><span>Admin Panel</span></button>
         </div>
       </nav>
-
-      {/* RENDER ACTIVE TAB */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-6">
         {activeTab === 'workspace' ? (
-          <InventoryWorkspace 
-            schools={schools}
-            clothingTypes={clothingTypes}
-            sizes={sizes}
-            colours={colours}
-            locations={locations}
-            categories={categories}
-            itemTypes={itemTypes}
-            inventory={inventory}
-            loading={loading}
-            seeding={seeding}
-          />
+          <InventoryWorkspace schools={schools} clothingTypes={clothingTypes} sizes={sizes} colours={colours} locations={locations} categories={categories} itemTypes={itemTypes} inventory={inventory} loading={loading} seeding={seeding} />
         ) : (
-          <AdminPanel 
-            schools={schools}
-            clothingTypes={clothingTypes}
-            sizes={sizes}
-            colours={colours}
-            locations={locations}
-            categories={categories}
-            itemTypes={itemTypes}
-          />
+          <AdminTabContainer schools={schools} clothingTypes={clothingTypes} sizes={sizes} colours={colours} locations={locations} categories={categories} itemTypes={itemTypes} />
         )}
       </main>
     </div>
