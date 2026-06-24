@@ -43,15 +43,20 @@ export default function App() {
     } else { setLoginError('Invalid email address or password. Access denied.'); }
   };
 
-  const handleSignOut = () => {
+    const handleSignOut = () => {
     localStorage.clear();              // Completely clear the browser's memory vault
     setEmailInput('');                 // Erase your typed email string
     setPasswordInput('');              // Erase your typed password string
     setUserRole('');                   // Erase your 'Dev' rank assignment
     setShowUserDropdown(false);        // Close the visual dropdown panel container
     setIsLoggedIn(false);              // Shut down the main warehouse dashboard view
-    window.location.reload();          // Force the web browser tab to instantly reload fresh
+    
+    // Give React 100 milliseconds to close down smoothly BEFORE reloading
+    setTimeout(() => {
+      window.location.reload();
+    }, 100);
   };
+
 
 
   const handleSendMessage = async () => {
