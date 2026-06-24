@@ -34,63 +34,68 @@ export default function LoginScreen({
   setContactMessage,
   handleSendMessage
 }: LoginScreenProps) {
-  // Navigation views
   const [view, setView] = useState<'login' | 'activate'>('login');
-  
-  // Account registry setup inputs
   const [activateEmail, setActivateEmail] = useState('');
   const [activatePassword, setActivatePassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [activateError, setActivateError] = useState('');
   const [activateSuccess, setActivateSuccess] = useState(false);
 
-  // CORE ACTION: MATCH APPROVED RECORD & INJECT USER PASSWORD
+  // CORE ACTION: MATCH RECORD, INJECT PASSWORD, AND MARK REQUEST AS APPROVED
   const handleAccountActivation = async (e: React.FormEvent) => {
     e.preventDefault();
     setActivateError('');
+    const targetEmail = activateEmail.trim().toLowerCase();
 
     if (activatePassword !== confirmPassword) {
       setActivateError('Passwords do not match. Please verify.');
       return;
     }
-
     if (activatePassword.length < 6) {
       setActivateError('Password must be at least 6 characters long.');
       return;
     }
 
     try {
-      // Find matching approved record in the users database collection
-      const q = query(collection(db, 'users'), where('email', '==', activateEmail.trim().toLowerCase()));
-      const querySnapshot = await getDocs(q);
+      // 1. Find matching approved profile record in the main users collection
+      const userQuery = query(collection(db, 'users'), where('email', '==', targetEmail));
+      const userSnapshot = await getDocs(userQuery);
 
-      if (querySnapshot.empty) {
-        setActivateError('This email is not on the approved staff registry list. Please submit an access request below.');
+      if (userSnapshot.empty) {
+        setActivateError('This email is not on the approved staff registry list. Please contact an Admin.');
         return;
       }
 
-      const matchingDoc = querySnapshot.docs[0];
-      const userData = matchingDoc.data();
+      const matchingUserDoc = userSnapshot.docs[0];
+      const userData = matchingUserDoc.data();
 
       if (!userData.active) {
         setActivateError('Your staff account access has been suspended by an administrator.');
         return;
       }
 
-      // Safe update: write the user-created password to their verified profile
-      await updateDoc(doc(db, 'users', matchingDoc.id), {
+      // Update their actual account password field document
+      await updateDoc(doc(db, 'users', matchingUserDoc.id), {
         password: activatePassword,
         activatedAt: serverTimestamp()
       });
+
+      // 2. FIXED: Find their signup request and flip its status to 'approved' so it slides off the Admin view
+      const reqQuery = query(collection(db, 'user_requests'), where('email', '==', targetEmail), where('status', '==', 'pending'));
+      const reqSnapshot = await getDocs(reqQuery);
+      
+      if (!reqSnapshot.empty) {
+        await updateDoc(doc(db, 'user_requests', reqSnapshot.docs[0].id), {
+          status: 'approved'
+        });
+      }
 
       setActivateSuccess(true);
       setTimeout(() => {
         setEmailInput(activateEmail);
         setView('login');
         setActivateSuccess(false);
-        setActivateEmail('');
-        setActivatePassword('');
-        setConfirmPassword('');
+        setActivateEmail(''); setActivatePassword(''); setConfirmPassword('');
       }, 2500);
 
     } catch (err) {
