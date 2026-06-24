@@ -18,8 +18,18 @@ import {
 } from 'lucide-react';
 
 export default function App() {
+  // Authentication states
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userRole, setUserRole] = useState<string>('');
+  const [emailInput, setEmailInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [loginError, setLoginError] = useState('');
+  
+  // Contact form states
   const [showContactForm, setShowContactForm] = useState(false);
+  const [contactMessage, setContactMessage] = useState('');
+
+  // UI Navigation tabs
   const [activeTab, setActiveTab] = useState<'workspace' | 'admin'>('workspace');
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
@@ -144,7 +154,28 @@ export default function App() {
     };
   }, []);
 
-  // IF USER IS NOT LOGGED IN, SHOW LOGIN BOX INTERFACE
+  // MASTER ACTION: VALIDATE THE TYPED LOGINS
+  const handleLogin = () => {
+    setLoginError('');
+    
+    // Check against your bulletproof master credentials
+    if (emailInput.trim() === 'carlhurles28@gmail.com' && passwordInput === 'J4sp3r#M1sty') {
+      setUserRole('Dev');
+      setIsLoggedIn(true);
+    } else {
+      setLoginError('Invalid email address or password. Access denied.');
+    }
+  };
+
+  // MASTER ACTION: CONTACT DEV TEAM PLACEHOLDER (WE WILL LINK TO FIRESTORE NEXT)
+  const handleSendMessage = () => {
+    if (!contactMessage.trim()) return;
+    alert(`Ticket logged for fallback tracking! Content: "${contactMessage}"`);
+    setContactMessage('');
+    setShowContactForm(false);
+  };
+
+  // IF USER IS NOT LOGGED IN, SHOW THE MUTATED LOGIN BLOCK INTERFACE
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6 font-sans">
@@ -160,16 +191,37 @@ export default function App() {
               Please enter your credentials to access the stock manager
             </p>
           </div>
+          
           <div className="space-y-4">
+            {loginError && (
+              <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs font-semibold text-red-600">
+                {loginError}
+              </div>
+            )}
             <div>
               <label className="block mb-1 text-sm font-semibold text-slate-700">Email Address</label>
-              <input type="email" placeholder="enter your email" className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" />
+              <input 
+                type="email" 
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                placeholder="enter your email" 
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 text-slate-900" 
+              />
             </div>
             <div>
               <label className="block mb-1 text-sm font-semibold text-slate-700">Password</label>
-              <input type="password" placeholder="••••••••" className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" />
+              <input 
+                type="password" 
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                placeholder="••••••••" 
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 text-slate-900" 
+              />
             </div>
-            <button onClick={() => setIsLoggedIn(true)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-md shadow-blue-500/10">
+            <button 
+              onClick={handleLogin} 
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-md shadow-blue-500/10"
+            >
               Sign In
             </button>
             <button onClick={() => setShowContactForm(!showContactForm)} className="w-full text-center text-xs font-semibold text-blue-600 hover:text-blue-700 mt-2 block transition-all">
@@ -177,8 +229,16 @@ export default function App() {
             </button>
             {showContactForm && (
               <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
-                <textarea placeholder="Type your message to the admin team here..." className="w-full h-20 p-3 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-500 bg-slate-50" />
-                <button onClick={() => alert('Message sent!')} className="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold rounded-xl text-xs transition-all">
+                <textarea 
+                  value={contactMessage}
+                  onChange={(e) => setContactMessage(e.target.value)}
+                  placeholder="Type your message to the admin team here..." 
+                  className="w-full h-20 p-3 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-500 bg-slate-50 text-slate-900" 
+                />
+                <button 
+                  onClick={handleSendMessage} 
+                  className="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold rounded-xl text-xs transition-all"
+                >
                   Send Message
                 </button>
               </div>
@@ -204,11 +264,11 @@ export default function App() {
               <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-1.5">
                 School Uniform Exchange
                 <span className="text-[10px] uppercase tracking-widest bg-secondary/10 text-secondary px-2 py-0.5 rounded font-extrabold animate-pulse">
-                  Live Firestore
+                  Live {userRole === 'Dev' ? 'Master Access' : 'Firestore'}
                 </span>
               </h1>
               <p className="text-xs text-slate-500 mt-0.5">
-                Kirklees & Beyond Warehouse Stock Manager
+                Kirklees & Beyond Warehouse Stock Manager — Logged in as: <span className="font-semibold text-blue-600">{userRole}</span>
               </p>
             </div>
           </div>
