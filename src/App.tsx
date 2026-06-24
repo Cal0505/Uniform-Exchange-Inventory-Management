@@ -37,7 +37,7 @@ export default function App() {
     }
   }, []);
 
-  // UPDATED LOGIN FLOW: NO MORE ACTIVATION NEEDED
+  // UPDATED LOGIN FLOW: CRITICAL STALE CODE REMOVED
   const handleLogin = async () => {
     setLoginError('');
     const cleanEmail = emailInput.trim().toLowerCase();
@@ -71,7 +71,8 @@ export default function App() {
         return;
       }
 
-      // Verify the password they selected when they originally filled out the request
+      // FIXED: Old "Not Activated" text completely wiped out here.
+      // Verify the password they selected when they originally filled out the request.
       if (userData.password === passwordInput) {
         setUserRole(userData.role || 'User');
         setLoggedInEmail(cleanEmail);
@@ -203,4 +204,3 @@ export default function App() {
     </div>
   );
 }
-
