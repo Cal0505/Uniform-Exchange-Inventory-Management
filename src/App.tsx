@@ -37,7 +37,7 @@ export default function App() {
     }
   }, []);
 
-  // UPGRADED LOGIN ROUTER: SMART STATUS LOOKUPS FOR UNAPPROVED USERS
+  // MASTER LOGIN HANDLER WITH EXACT CUSTOM ERROR STRING MATCHES
   const handleLogin = async () => {
     setLoginError('');
     const cleanEmail = emailInput.trim().toLowerCase();
@@ -59,7 +59,8 @@ export default function App() {
       const userSnapshot = await getDocs(userQuery);
 
       if (!userSnapshot.empty) {
-        const userData = userSnapshot.docs[0].data();
+        const userDoc = userSnapshot.docs[0];
+        const userData = userDoc.data();
 
         if (!userData.active) {
           setLoginError('Your staff account access has been suspended by an administrator.');
@@ -79,15 +80,16 @@ export default function App() {
         return;
       }
 
-      // 3. SMART CHECK: If email isn't an active user, check if they are in pending requests pool
+      // 3. Pending Requests Pool Check
       const reqQuery = query(collection(db, 'user_requests'), where('email', '==', cleanEmail), where('status', '==', 'pending'));
       const reqSnapshot = await getDocs(reqQuery);
 
       if (!reqSnapshot.empty) {
         setLoginError('Your account request is still Pending. Try again later or send an additional message to the Dev team below.');
-        setShowContactForm(true); // Automatically expand message drawer for convenience
+        setShowContactForm(true); 
       } else {
-        setLoginError('No request found for this email. Please click "New Staff Member" below to submit an official access request.');
+        // FIXED: Exact text match adjusted here for unregistered profiles
+        setLoginError('No account found with this email address.');
       }
 
     } catch (err) {
