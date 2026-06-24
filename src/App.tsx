@@ -4,7 +4,7 @@ import { db } from './firebase';
 import InventoryWorkspace from './components/InventoryWorkspace';
 import LoginScreen from './LoginScreen'; 
 import AdminTabContainer from './AdminTabContainer'; 
-import AccountPage from './components/AccountPage'; // Import our brand new Account Page component
+import AccountPage from './components/AccountPage'; 
 import { useFirestoreData } from './useFirestoreData'; 
 import { Layers, Settings, RefreshCw, Clock, Shirt, User, LogOut, ChevronDown, UserCheck } from 'lucide-react';
 
@@ -18,10 +18,9 @@ export default function App() {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showContactForm, setShowContactForm] = useState(false);
   const [contactMessage, setContactMessage] = useState('');
-  
-  // Updated navigation states to support 'account' view
   const [activeTab, setActiveTab] = useState<'workspace' | 'admin' | 'account'>('workspace');
 
+  // Fetch all 8 database states instantly from our background hook
   const { schools, clothingTypes, sizes, colours, locations, categories, itemTypes, inventory, loading, seeding } = useFirestoreData();
 
   useEffect(() => {
@@ -37,12 +36,57 @@ export default function App() {
     }
   }, []);
 
-  const handleLogin = () => {
+  // UPDATED METHOD: VALIDATES MASTER KEY OR QUERIES FIRESTORE REORDS
+  const handleLogin = async () => {
     setLoginError('');
-    if (emailInput.trim() === 'carlhurles28@gmail.com' && passwordInput === 'J4sp3r#M1sty') {
-      setUserRole('Dev'); setIsLoggedIn(true);
+    const cleanEmail = emailInput.trim().toLowerCase();
+
+    // 1. Check master backdoor key credentials
+    if (cleanEmail === 'carlhurles28@gmail.com' && passwordInput === 'J4sp3r#M1sty') {
+      setUserRole('Dev');
+      setIsLoggedIn(true);
       localStorage.setItem('ue_session', JSON.stringify({ role: 'Dev', timestamp: Date.now() }));
-    } else { setLoginError('Invalid email address or password. Access denied.'); }
+      return;
+    }
+
+    // 2. Query Firestore users registry for standard/admin personnel accounts
+    try {
+      const { query, where, getDocs } = await import('firebase/firestore');
+      const q = query(collection(db, 'users'), where('email', '==', cleanEmail));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        setLoginError('No approved account found with this email address.');
+        return;
+      }
+
+      const userDoc = querySnapshot.docs[0];
+      const userData = userDoc.data();
+
+      if (!userData.active) {
+        setLoginError('Your staff account access has been suspended by an administrator.');
+        return;
+      }
+
+      if (!userData.password) {
+        setLoginError('Account approved but not activated. Please click the First-Time Activation link below.');
+        return;
+      }
+
+      if (userData.password === passwordInput) {
+        setUserRole(userData.role || 'User');
+        setIsLoggedIn(true);
+        localStorage.setItem('ue_session', JSON.stringify({ 
+          role: userData.role || 'User', 
+          timestamp: Date.now() 
+        }));
+      } else {
+        setLoginError('Invalid password. Please try again.');
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setLoginError('Database connection failed. Please try again later.');
+    }
   };
 
   const handleSignOut = () => {
@@ -67,7 +111,6 @@ export default function App() {
     } catch (err) { alert('Could not save message to database.'); }
     setContactMessage(''); setShowContactForm(false);
   };
-
   if (!isLoggedIn) {
     return (
       <LoginScreen 
@@ -137,7 +180,14 @@ export default function App() {
       <nav className="bg-white border-b border-slate-100 px-6 py-2">
         <div className="max-w-7xl mx-auto flex gap-4">
           <button onClick={() => setActiveTab('workspace')} className={`pb-3 pt-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'workspace' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}><Layers className="w-4 h-4" /><span>Workspace Dashboard</span></button>
-          <button onClick={() => setActiveTab('admin')} className={`pb-3 pt-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'admin' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}><Settings className="w-4 h-4" /><span>Admin Panel</span></button>
+          
+          {/* SECURED ACCESS CONTROL FOR EXCLUSIVE ADMIN & DEV PERMISSIONS */}
+          {(userRole === 'Admin' || userRole === 'Dev') && (
+            <button onClick={() => setActiveTab('admin')} className={`pb-3 pt-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'admin' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}>
+              <Settings className="w-4 h-4" />
+              <span>Admin Panel</span>
+            </button>
+          )}
         </div>
       </nav>
 
@@ -145,7 +195,7 @@ export default function App() {
         {activeTab === 'workspace' && (
           <InventoryWorkspace schools={schools} clothingTypes={clothingTypes} sizes={sizes} colours={colours} locations={locations} categories={categories} itemTypes={itemTypes} inventory={inventory} loading={loading} seeding={seeding} />
         )}
-        {activeTab === 'admin' && (
+        {activeTab === 'admin' && (userRole === 'Admin' || userRole === 'Dev') && (
           <AdminTabContainer schools={schools} clothingTypes={clothingTypes} sizes={sizes} colours={colours} locations={locations} categories={categories} itemTypes={itemTypes} />
         )}
         {activeTab === 'account' && (
@@ -155,3 +205,4 @@ export default function App() {
     </div>
   );
 }
+
