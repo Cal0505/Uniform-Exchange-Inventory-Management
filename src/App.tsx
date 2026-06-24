@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, handleFirestoreError, OperationType } from './firebase';
-import { collection, onSnapshot, query } from 'firebase/firestore';
+import { collection, onSnapshot, query, addDoc, serverTimestamp } from 'firebase/firestore';
 import { seedDatabaseIfEmpty } from './seeder';
 import { School, ClothingType, Size, Colour, Location, InventoryItem, Category, ItemType } from './types';
 import AdminPanel from './components/AdminPanel';
@@ -14,7 +14,9 @@ import {
   Clock,
   Shirt,
   User,
-  ExternalLink
+  ExternalLink,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 export default function App() {
@@ -24,6 +26,7 @@ export default function App() {
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [showPassword, setShowPassword] = useState(false); // Eye icon state
   
   // Contact form states
   const [showContactForm, setShowContactForm] = useState(false);
@@ -43,6 +46,29 @@ export default function App() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [itemTypes, setItemTypes] = useState<ItemType[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+
+  // 15-MINUTE PERSISTENCE CHECK ON APP START
+  useEffect(() => {
+    const savedLoginStr = localStorage.getItem('ue_session');
+    if (savedLoginStr) {
+      try {
+        const session = JSON.parse(savedLoginStr);
+        const now = Date.now();
+        const fifteenMinutes = 15 * 60 * 1000;
+        
+        // If current time minus login time is less than 15 mins, restore session
+        if (now - session.timestamp < fifteenMinutes) {
+          setUserRole(session.role);
+          setIsLoggedIn(true);
+        } else {
+          // Expired session - clean up browser memory
+          localStorage.removeItem('ue_session');
+        }
+      } catch (e) {
+        console.error('Session restore failed:', e);
+      }
+    }
+  }, []);
 
   // Seed database if empty on component mount
   useEffect(() => {
@@ -154,27 +180,43 @@ export default function App() {
     };
   }, []);
 
-  // MASTER ACTION: VALIDATE THE TYPED LOGINS
+  // MASTER ACTION: VALIDATE THE TYPED LOGINS & SAVE TIME TO MEMORY
   const handleLogin = () => {
     setLoginError('');
     
-    // Check against your bulletproof master credentials
     if (emailInput.trim() === 'carlhurles28@gmail.com' && passwordInput === 'J4sp3r#M1sty') {
       setUserRole('Dev');
       setIsLoggedIn(true);
+      
+      // Save current login details and dynamic time tag to localStorage
+      const sessionData = {
+        role: 'Dev',
+        timestamp: Date.now()
+      };
+      localStorage.setItem('ue_session', JSON.stringify(sessionData));
     } else {
       setLoginError('Invalid email address or password. Access denied.');
     }
   };
 
-  // MASTER ACTION: CONTACT DEV TEAM PLACEHOLDER (WE WILL LINK TO FIRESTORE NEXT)
-  const handleSendMessage = () => {
+  // REAL FIRESTORE ACTION: SAVE THE TICKET MESSAGE DIRECTLY TO GOOGLE CLOUD
+  const handleSendMessage = async () => {
     if (!contactMessage.trim()) return;
-    alert(`Ticket logged for fallback tracking! Content: "${contactMessage}"`);
+    try {
+      await addDoc(collection(db, 'developer_tickets'), {
+        senderEmail: emailInput.trim() || 'anonymous@user.com',
+        message: contactMessage.trim(),
+        timestamp: serverTimestamp(),
+        status: 'pending'
+      });
+      alert('Your message was successfully sent straight to the developer database!');
+    } catch (err) {
+      console.error('Error logging support ticket:', err);
+      alert('Could not save to database. Ticket logged locally instead.');
+    }
     setContactMessage('');
     setShowContactForm(false);
   };
-
   // IF USER IS NOT LOGGED IN, SHOW THE MUTATED LOGIN BLOCK INTERFACE
   if (!isLoggedIn) {
     return (
@@ -210,13 +252,22 @@ export default function App() {
             </div>
             <div>
               <label className="block mb-1 text-sm font-semibold text-slate-700">Password</label>
-              <input 
-                type="password" 
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                placeholder="••••••••" 
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 text-slate-900" 
-              />
+              <div className="relative">
+                <input 
+                  type={showPassword ? 'text' : 'password'} 
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  placeholder="••••••••" 
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 text-slate-900 pr-10" 
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
             <button 
               onClick={handleLogin} 
@@ -248,6 +299,7 @@ export default function App() {
       </div>
     );
   }
+
   // IF USER IS LOGGED IN, RENDER THE ACTUAL WORKSPACE DASHBOARD
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans antialiased">
