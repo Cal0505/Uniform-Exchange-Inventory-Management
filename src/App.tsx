@@ -37,12 +37,10 @@ export default function App() {
     }
   }, []);
 
-  // MASTER LOGIN HANDLER WITH EXACT CUSTOM ERROR STRING MATCHES
   const handleLogin = async () => {
     setLoginError('');
     const cleanEmail = emailInput.trim().toLowerCase();
 
-    // 1. Backdoor Master Dev validation
     if (cleanEmail === 'carlhurles28@gmail.com' && passwordInput === 'J4sp3r#M1sty') {
       setUserRole('Dev');
       setLoggedInEmail('carlhurles28@gmail.com');
@@ -54,7 +52,6 @@ export default function App() {
     try {
       const { query, where, getDocs } = await import('firebase/firestore');
       
-      // 2. Main Active Users Table Check
       const userQuery = query(collection(db, 'users'), where('email', '==', cleanEmail));
       const userSnapshot = await getDocs(userQuery);
 
@@ -80,7 +77,6 @@ export default function App() {
         return;
       }
 
-      // 3. Pending Requests Pool Check
       const reqQuery = query(collection(db, 'user_requests'), where('email', '==', cleanEmail), where('status', '==', 'pending'));
       const reqSnapshot = await getDocs(reqQuery);
 
@@ -88,7 +84,6 @@ export default function App() {
         setLoginError('Your account request is still Pending. Try again later or send an additional message to the Dev team below.');
         setShowContactForm(true); 
       } else {
-        // FIXED: Exact text match adjusted here for unregistered profiles
         setLoginError('No account found with this email address.');
       }
 
@@ -117,6 +112,7 @@ export default function App() {
     } catch (err) { alert('Could not save message to database.'); }
     setContactMessage(''); setShowContactForm(false);
   };
+
   if (!isLoggedIn) {
     return (
       <LoginScreen 
@@ -129,7 +125,6 @@ export default function App() {
       />
     );
   }
-
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans antialiased text-slate-900">
       <header className="bg-white border-b border-slate-100 px-6 py-4 sticky top-0 z-40 shadow-sm">
