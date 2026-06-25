@@ -6,7 +6,16 @@ import LoginScreen from './LoginScreen';
 import AdminPanel from './components/AdminPanel';
 import AccountPage from './components/AccountPage'; 
 import { useFirestoreData } from './useFirestoreData'; 
-import { Layers, Settings, RefreshCw, Clock, Shirt, User, LogOut, ChevronDown, UserCheck } from 'lucide-react';
+import { Layers, Settings, RefreshCw, Clock, Shirt, User, LogOut, ChevronDown, UserCheck, BarChart3 } from 'lucide-react';
+
+// ⚙️ PROPERTY SYNC INTERFACES TO PREVENT TYPE CONFLICT WHITE SCREENS
+interface AdvancedSchool {
+  id: string; name: string; schoolType: 'JIN' | 'IN' | 'M' | 'H'; schoolIdCode: string; skuCode: string;
+}
+
+interface AdvancedAttribute {
+  id: string; name?: string; label?: string; skuCode: string; ruleProfile?: string;
+}
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -19,9 +28,40 @@ export default function App() {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showContactForm, setShowContactForm] = useState(false);
   const [contactMessage, setContactMessage] = useState('');
-  const [activeTab, setActiveTab] = useState<'workspace' | 'admin' | 'account'>('workspace');
+  
+  // 🗺️ RENAMED CORE SIDEBAR TABS: INVENTORY & STATISTICS LIVE LANES
+  const [activeTab, setActiveTab] = useState<'inventory' | 'admin' | 'account' | 'statistics'>('inventory');
 
-  const { schools, clothingTypes, sizes, colours, locations, categories, itemTypes, inventory, loading, seeding } = useFirestoreData();
+  // Fetch collections data directly from master data hook
+  const dataPool = useFirestoreData();
+
+  // 🛡️ DYNAMIC ANTI-CRASH school data parser fallback map
+  const mappedSchools: AdvancedSchool[] = (dataPool.schools || []).map((s: any) => {
+    const rawSku = s.skuCode || 'META';
+    const computedId = s.schoolIdCode || (rawSku.length > 3 ? rawSku.substring(3) : rawSku);
+    const computedType = s.schoolType || (rawSku.length >= 3 ? rawSku.substring(0, 3) : 'JIN');
+
+    return {
+      id: s.id,
+      name: s.name || 'Unnamed School Record',
+      schoolType: ['JIN', 'IN', 'M', 'H'].includes(computedType) ? computedType as any : 'JIN',
+      schoolIdCode: computedId.toUpperCase(),
+      skuCode: s.skuCode || `${computedType}${computedId}`.toUpperCase()
+    };
+  });
+
+  const mapAttribute = (arr: any[]): AdvancedAttribute[] => (arr || []).map((a: any) => ({
+    id: a.id,
+    name: a.name,
+    label: a.label,
+    skuCode: a.skuCode || '',
+    ruleProfile: a.ruleProfile
+  }));
+
+  const advancedClothingTypes = mapAttribute(dataPool.clothingTypes);
+  const advancedSizes = mapAttribute(dataPool.sizes);
+  const advancedColours = mapAttribute(dataPool.colours);
+  const advancedLocations = mapAttribute(dataPool.locations);
 
   useEffect(() => {
     const savedLoginStr = localStorage.getItem('ue_session');
@@ -36,7 +76,6 @@ export default function App() {
       } catch (e) { console.error('Session failed:', e); }
     }
   }, []);
-
   const handleLogin = async () => {
     setLoginError('');
     const cleanEmail = emailInput.trim().toLowerCase();
@@ -96,18 +135,15 @@ export default function App() {
     }
   };
 
-  // NEW METHOD: TOTAL CACHE FLUSH STRIPS ACCIDENTAL CACHE LOOPS INSTANTLY
   const handleSignOut = () => {
     localStorage.clear();              
-    sessionStorage.clear(); // Wipe short term session pools
+    sessionStorage.clear();
     setEmailInput(''); 
     setPasswordInput(''); 
     setUserRole(''); 
     setLoggedInEmail('');
     setShowUserDropdown(false); 
     setIsLoggedIn(false); 
-    
-    // Force browser to fully replace active memory map and boot clean at landing URL
     window.location.replace(window.location.origin);
   };
 
@@ -130,13 +166,13 @@ export default function App() {
         emailInput={emailInput} setEmailInput={setEmailInput}
         passwordInput={passwordInput} setPasswordInput={setPasswordInput}
         loginError={loginError} showPassword={showPassword} setShowPassword={setShowPassword}
-        handleLogin={handleLogin} showContactForm={showContactForm} setShowContactForm={setShowContactForm}
-        contactMessage={contactMessage} setContactMessage={setContactMessage}
+        handleLogin={handleLogin} 
+        {...{ showContactForm, setShowContactForm, contactMessage, setContactMessage } as any}
         handleSendMessage={handleSendMessage}
       />
     );
   }
-   // --- NEW RESPONSIVE WORKSPACE APP INTERFACE ---
+
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex flex-col md:flex-row font-sans antialiased text-[#54595F]">
       
@@ -152,10 +188,10 @@ export default function App() {
         </div>
       </header>
 
-      {/* 💻 PERMANENT VERTICAL WEBSITE-MATCHED SIDEBAR */}
+      {/* 💻 PERMANENT VERTICAL SIDEBAR RESTRUCTURE */}
       <aside className="hidden md:flex flex-col w-20 lg:w-64 bg-brand-primary text-white min-h-screen sticky top-0 self-start p-5 transition-all duration-300 shadow-xl">
         
-        {/* White rounded badge mimicking your logo frame */}
+        {/* Company Identity White Rounded Badge */}
         <div className="flex items-center gap-3 lg:px-2 py-3 border-b border-white/20 justify-center lg:justify-start overflow-hidden">
           <div className="p-2.5 bg-white text-brand-primary rounded-2xl shadow-md flex-shrink-0"><Shirt className="w-5 h-5 stroke-[2.5]" /></div>
           <div className="hidden lg:block leading-tight">
@@ -164,19 +200,34 @@ export default function App() {
           </div>
         </div>
 
-        {/* Navigation panel links mapping system controls */}
+        {/* 🗺️ DYNAMIC NAVIGATION HUB LINKS */}
         <nav className="flex flex-col gap-2 mt-8 flex-1">
+          {/* 🏷️ CLEAN HUMAN READABLE INVENTORY SECTIONS */}
           <button 
             type="button" 
-            onClick={() => setActiveTab('workspace')} 
+            onClick={() => setActiveTab('inventory')} 
             className={`w-full flex items-center justify-center lg:justify-start gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all border cursor-pointer ${
-              activeTab === 'workspace' 
+              activeTab === 'inventory' 
                 ? 'bg-brand-yellow text-slate-900 border-brand-yellow shadow-md' 
                 : 'text-white border-transparent hover:bg-white/10'
             }`}
           >
             <Layers className="w-4 h-4 flex-shrink-0" />
-            <span className="hidden lg:block">Workspace Dashboard</span>
+            <span className="hidden lg:block">Inventory</span>
+          </button>
+
+          {/* 🏷️ BRAND NEW DEDICATED STATISTICS SIDEBAR PANEL */}
+          <button 
+            type="button" 
+            onClick={() => setActiveTab('statistics')} 
+            className={`w-full flex items-center justify-center lg:justify-start gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all border cursor-pointer ${
+              activeTab === 'statistics' 
+                ? 'bg-brand-yellow text-slate-900 border-brand-yellow shadow-md' 
+                : 'text-white border-transparent hover:bg-white/10'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4 flex-shrink-0" />
+            <span className="hidden lg:block">Statistics</span>
           </button>
 
           {(userRole === 'Admin' || userRole === 'admin' || userRole === 'Dev') && (
@@ -208,10 +259,8 @@ export default function App() {
           </button>
         </nav>
 
-        {/* 🛡️ BRAND-TUNED ACCOUNT CONTROL CENTER FOOTER CARD */}
+        {/* ACCOUNT CONTROL TIER PANEL INTERFACE FOOTER */}
         <div className="bg-brand-teal p-3.5 rounded-2xl flex flex-col gap-3.5 border border-white/10 shadow-inner">
-          
-          {/* User Initial Avatar and Text Profile Block */}
           <div className="hidden lg:flex items-center gap-3 border-b border-white/20 pb-3">
             <div className="w-9 h-9 rounded-full bg-slate-900/10 border-2 border-white/40 flex items-center justify-center text-xs font-black text-white uppercase shadow-inner flex-shrink-0">
               {loggedInEmail ? loggedInEmail.substring(0, 2) : 'UE'}
@@ -225,14 +274,11 @@ export default function App() {
               </span>
             </div>
           </div>
-
-          {/* 🟢 Live Pulsing Firebase Server Status Monitor element */}
           <div className="flex items-center justify-center lg:justify-start gap-2 py-1.5 lg:px-2.5 bg-white/10 text-white rounded-xl text-[10px] font-bold shadow-xs">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
             <span className="hidden lg:block uppercase tracking-wider">Firebase Operational</span>
           </div>
 
-          {/* Session Termination trigger */}
           <button 
             type="button" 
             onClick={handleSignOut} 
@@ -244,10 +290,8 @@ export default function App() {
         </div>
       </aside>
 
-      {/* 🎛️ MAIN COMPONENT LAYOUT REGION (No top horizontal headers) */}
+      {/* 🎛️ MAIN APP COMPONENT WORKSPACE VIEW WINDOW LAYOUTS */}
       <div className="flex-1 flex flex-col min-w-0 relative">
-        
-        {/* Pinned Float Button targeting mobile screen layouts to force structural refreshes inside PWA frames */}
         <button
           type="button"
           onClick={() => window.location.reload()}
@@ -258,35 +302,58 @@ export default function App() {
         </button>
 
         <main className="flex-1 p-4 md:p-8 overflow-x-hidden pb-24 md:pb-8">
-          {activeTab === 'workspace' && (
-            <InventoryWorkspace schools={schools} clothingTypes={clothingTypes} sizes={sizes} colours={colours} locations={locations} categories={categories} itemTypes={itemTypes} inventory={inventory} loading={loading} seeding={seeding} />
+          {activeTab === 'inventory' && (
+            <InventoryWorkspace 
+              schools={mappedSchools} 
+              clothingTypes={advancedClothingTypes.map(t => ({ ...t, name: t.name || '' })) as any} 
+              sizes={advancedSizes.map(s => ({ ...s, label: s.label || s.name || '' })) as any} 
+              colours={advancedColours.map(c => ({ ...c, name: c.name || '' })) as any} 
+              locations={advancedLocations.map(l => ({ ...l, name: l.name || '' })) as any}
+              categories={dataPool.categories || []} 
+              itemTypes={dataPool.itemTypes || []} 
+              inventory={dataPool.inventory || []} 
+
+            />
           )}
+
+          {activeTab === 'statistics' && (
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-md text-left space-y-4">
+              <h2 className="text-lg font-serif font-black text-slate-900 tracking-tight">📊 High-Level Analytics & Facility Statistics</h2>
+              <p className="text-xs text-slate-500">Live operational reporting dashboard. High-density charts and warehouse metrics display row parameters map here.</p>
+              <div className="p-8 bg-slate-50 border rounded-2xl text-xs font-mono text-slate-400 text-center">
+                Total Inventory Batches Managed: {dataPool.inventory?.length || 0} unique items logged.
+              </div>
+            </div>
+          )}
+
           {activeTab === 'admin' && (userRole === 'Admin' || userRole === 'admin' || userRole === 'Dev') && (
             <AdminPanel 
-              schools={schools} 
-              clothingTypes={clothingTypes} 
-              sizes={sizes} 
-              colours={colours} 
-              locations={locations} 
-              categories={categories} 
-              itemTypes={itemTypes}
+              schools={mappedSchools} 
+              clothingTypes={advancedClothingTypes} 
+              sizes={advancedSizes} 
+              colours={advancedColours} 
+              locations={advancedLocations} 
+              categories={dataPool.categories} 
+              itemTypes={dataPool.itemTypes}
               userRole={userRole}
             />
           )}
 
           {activeTab === 'account' && (
-            <AccountPage currentRole={userRole} userEmail={loggedInEmail} userRole={userRole} />
+            <AccountPage userEmail={loggedInEmail} userRole={userRole} />
           )}
+
         </main>
       </div>
 
-      {/* 📱 MOBILE FOOTER NAVIGATION BAR (Stays pinned for phone screen widths) */}
+      {/* 📱 MOBILE FOOTER NAVIGATION BAR CONTROLS ELEMENT */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-200 flex items-center justify-around z-50 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
-        <button type="button" onClick={() => setActiveTab('workspace')} className={`flex flex-col items-center gap-1 text-[10px] font-bold w-1/3 transition-colors ${activeTab === 'workspace' ? 'text-brand-primary' : 'text-slate-400'}`}><Layers className="w-5 h-5" /><span>Workspace</span></button>
+        <button type="button" onClick={() => setActiveTab('inventory')} className={`flex flex-col items-center gap-1 text-[10px] font-bold w-1/4 transition-colors ${activeTab === 'inventory' ? 'text-brand-primary' : 'text-slate-400'}`}><Layers className="w-5 h-5" /><span>Inventory</span></button>
+        <button type="button" onClick={() => setActiveTab('statistics')} className={`flex flex-col items-center gap-1 text-[10px] font-bold w-1/4 transition-colors ${activeTab === 'statistics' ? 'text-brand-primary' : 'text-slate-400'}`}><BarChart3 className="w-5 h-5" /><span>Stats</span></button>
         {(userRole === 'Admin' || userRole === 'admin' || userRole === 'Dev') && (
-          <button type="button" onClick={() => setActiveTab('admin')} className={`flex flex-col items-center gap-1 text-[10px] font-bold w-1/3 transition-colors ${activeTab === 'admin' ? 'text-brand-primary' : 'text-slate-400'}`}><Settings className="w-5 h-5" /><span>Admin</span></button>
+          <button type="button" onClick={() => setActiveTab('admin')} className={`flex flex-col items-center gap-1 text-[10px] font-bold w-1/4 transition-colors ${activeTab === 'admin' ? 'text-brand-primary' : 'text-slate-400'}`}><Settings className="w-5 h-5" /><span>Admin</span></button>
         )}
-        <button type="button" onClick={() => setActiveTab('account')} className={`flex flex-col items-center gap-1 text-[10px] font-bold w-1/3 transition-colors ${activeTab === 'account' ? 'text-brand-primary' : 'text-slate-400'}`}><User className="w-5 h-5" /><span>Profile</span></button>
+        <button type="button" onClick={() => setActiveTab('account')} className={`flex flex-col items-center gap-1 text-[10px] font-bold w-1/4 transition-colors ${activeTab === 'account' ? 'text-brand-primary' : 'text-slate-400'}`}><User className="w-5 h-5" /><span>Profile</span></button>
       </nav>
 
     </div>

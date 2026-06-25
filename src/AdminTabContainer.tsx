@@ -61,7 +61,15 @@ export default function AdminTabContainer({
           <UserManagement />
         ) : (
           <AdminPanel 
-            schools={schools}
+                         schools={(schools || []).map((s: any) => ({
+               id: s.id,
+               name: s.name || 'Unnamed School Record',
+               schoolType: s.schoolType || 'JIN',
+               schoolIdCode: s.schoolIdCode || (s.skuCode ? s.skuCode.substring(3) : 'META'),
+               skuCode: s.skuCode || 'JINMETA',
+               logoUrl: s.logoUrl || ''
+             }))}
+
             clothingTypes={clothingTypes}
             sizes={sizes}
             colours={colours}
