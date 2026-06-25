@@ -1180,40 +1180,16 @@ export default function InventoryWorkspace({
 
   return (
     <div className="space-y-8">
-      {/* Workspace Sub-Header / Control Bar */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-        <div>
-          <h2 className="text-xl font-display font-extrabold text-slate-900 tracking-tight">Uniform Exchange Kirklees</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Real-time stock controls, consolidated totals and packing automation</p>
-        </div>
-
-        {/* Global Action: CSV/Excel Imports & Exports */}
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <button
-            onClick={() => setIsImportModalOpen(true)}
-            className="flex-1 md:flex-initial py-2.5 px-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <Upload className="w-3.5 h-3.5 text-primary" />
-            Import CSV / Excel
-          </button>
-          <button
-            onClick={handleExportCsv}
-            className="flex-1 md:flex-initial py-2.5 px-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5 text-secondary" />
-            Export CSV
-          </button>
-        </div>
-      </div>
+{/* Workspace Content View Layer */}
 
       {/* Workspace Navigation Tabs across the screen */}
-      <div className="flex border-b border-slate-100 bg-white p-1 rounded-2xl shadow-sm border relative z-10">
+      <div className="flex border border-slate-200 bg-white p-1 rounded-2xl shadow-sm relative z-10">
         <button
           onClick={() => setActiveWorkspaceTab('totals')}
-          className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+          className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer border ${
             activeWorkspaceTab === 'totals'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              ? 'bg-brand-primary text-white border-brand-primary shadow-xs'
+              : 'text-brand-text border-transparent hover:text-brand-primary hover:bg-orange-50/50'
           }`}
         >
           <Layers className="w-4 h-4" />
@@ -1221,10 +1197,10 @@ export default function InventoryWorkspace({
         </button>
         <button
           onClick={() => setActiveWorkspaceTab('logo')}
-          className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+          className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer border ${
             activeWorkspaceTab === 'logo'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              ? 'bg-brand-primary text-white border-brand-primary shadow-xs'
+              : 'text-brand-text border-transparent hover:text-brand-primary hover:bg-orange-50/50'
           }`}
         >
           <Sparkles className="w-4 h-4" />
@@ -1232,10 +1208,10 @@ export default function InventoryWorkspace({
         </button>
         <button
           onClick={() => setActiveWorkspaceTab('plain')}
-          className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+          className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer border ${
             activeWorkspaceTab === 'plain'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              ? 'bg-brand-primary text-white border-brand-primary shadow-xs'
+              : 'text-brand-text border-transparent hover:text-brand-primary hover:bg-orange-50/50'
           }`}
         >
           <Package className="w-4 h-4" />
@@ -1246,138 +1222,145 @@ export default function InventoryWorkspace({
       {/* Tab 1: Inventory Totals */}
       {activeWorkspaceTab === 'totals' && (
         <div className="space-y-6 text-left">
-          {/* Dashboard Title & Overview */}
-          <div className="bg-slate-900 rounded-3xl p-6 text-white space-y-4 shadow-xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-slate-800 rounded-full blur-3xl opacity-30 -mr-16 -mt-16 pointer-events-none" />
+          {/* Dashboard Title & Overview Card */}
+          <div className="bg-white rounded-3xl p-6 text-slate-800 space-y-4 shadow-xs relative overflow-hidden border border-slate-200 border-t-4 border-brand-primary">
             <div className="flex items-center justify-between relative z-10">
               <div>
-                <span className="text-[10px] font-mono uppercase tracking-widest text-indigo-400 font-bold">Facility Insights</span>
-                <h3 className="text-xl font-display font-extrabold tracking-tight mt-1">Kirklees Warehouse Stock Report</h3>
+                <span className="text-[10px] font-mono uppercase tracking-widest text-brand-primary font-black">Facility Insights</span>
+                <h3 className="text-xl font-serif font-black tracking-tight text-slate-900 mt-0.5">Stock Report</h3>
               </div>
-              <span className="bg-indigo-500/20 text-indigo-300 font-bold text-xs px-3 py-1 rounded-full border border-indigo-500/30">
+              <span className="bg-slate-100 text-brand-primary font-bold text-xs px-3 py-1 rounded-full border border-slate-200 shadow-xs">
                 {stats.totalUnits} Total Units
               </span>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 relative z-10">
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                <span className="block text-[10px] text-slate-400 uppercase font-mono font-bold">Logo Badged Items</span>
-                <span className="block text-2xl font-extrabold text-orange-400 mt-1">{stats.totalLogoUnits}</span>
+              {/* Card 1: Orange accent for Logo Badges */}
+              <div className="bg-[#F8F9FA] border border-slate-200/60 rounded-2xl p-4 transition-colors hover:bg-slate-50">
+                <span className="block text-[10px] text-brand-text uppercase font-mono font-bold">Logo Badged Items</span>
+                <span className="block text-2xl font-black text-brand-orange mt-1">{stats.totalLogoUnits}</span>
                 <span className="text-[10px] text-slate-400 mt-0.5 block">units in stock</span>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                <span className="block text-[10px] text-slate-400 uppercase font-mono font-bold">Plain Core Items</span>
-                <span className="block text-2xl font-extrabold text-teal-400 mt-1">{stats.totalPlainUnits}</span>
+              
+              {/* Card 2: Solid Slate Neutral for Plain Core */}
+              <div className="bg-[#F8F9FA] border border-slate-200/60 rounded-2xl p-4 transition-colors hover:bg-slate-50">
+                <span className="block text-[10px] text-brand-text uppercase font-mono font-bold">Plain Core Items</span>
+                <span className="block text-2xl font-black text-slate-800 mt-1">{stats.totalPlainUnits}</span>
                 <span className="text-[10px] text-slate-400 mt-0.5 block">units in stock</span>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                <span className="block text-[10px] text-slate-400 uppercase font-mono font-bold">Loose Picker Stock</span>
-                <span className="block text-2xl font-extrabold text-indigo-400 mt-1">{stats.totalSingles}</span>
+              
+              {/* Card 3: Crisp Teal accent for loose shelving stock */}
+              <div className="bg-[#F8F9FA] border border-slate-200/60 rounded-2xl p-4 transition-colors hover:bg-slate-50">
+                <span className="block text-[10px] text-brand-text uppercase font-mono font-bold">Loose Picker Stock</span>
+                <span className="block text-2xl font-black text-brand-teal mt-1">{stats.totalSingles}</span>
                 <span className="text-[10px] text-slate-400 mt-0.5 block">{stats.singlesCount} items on shelves</span>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                <span className="block text-[10px] text-slate-400 uppercase font-mono font-bold">Bulk VacPac Stock</span>
-                <span className="block text-2xl font-extrabold text-rose-400 mt-1">{stats.totalVacpacs}</span>
+              
+              {/* Card 4: Signature Yellow gold text for Bulk VacPac */}
+              <div className="bg-[#F8F9FA] border border-slate-200/60 rounded-2xl p-4 transition-colors hover:bg-slate-50">
+                <span className="block text-[10px] text-brand-text uppercase font-mono font-bold">Bulk VacPac Stock</span>
+                <span className="block text-2xl font-black text-brand-yellow mt-1">{stats.totalVacpacs}</span>
                 <span className="text-[10px] text-slate-400 mt-0.5 block">units in {stats.vacpacCount} packs</span>
               </div>
             </div>
           </div>
 
+
           {/* Visual Distribution Graphs */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Graph Card 1: Category composition */}
-            <div className="bg-white rounded-3xl border border-slate-100 p-6 space-y-5 shadow-sm">
-              <h4 className="font-display font-extrabold text-slate-900 text-sm tracking-tight flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-orange-500" />
+            <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-5 shadow-sm">
+              <h4 className="font-sans font-extrabold text-brand-secondary text-sm tracking-tight flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-brand-orange" />
                 Category Distribution (Logo vs Plain)
               </h4>
               <div className="space-y-3">
-                <div className="flex justify-between items-center text-xs font-semibold">
-                  <span className="text-orange-600 flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block" />
+                <div className="flex justify-between items-center text-xs font-bold">
+                  <span className="text-brand-orange flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-brand-orange inline-block" />
                     Logo Items: {stats.totalLogoUnits} units
                   </span>
-                  <span className="text-teal-600 flex items-center gap-1">
+                  <span className="text-brand-teal flex items-center gap-1">
                     Plain Items: {stats.totalPlainUnits} units
-                    <span className="w-2.5 h-2.5 rounded-full bg-teal-500 inline-block" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-brand-teal inline-block" />
                   </span>
                 </div>
                 {/* Visual Stacked bar */}
                 <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden flex">
                   <div
                     style={{ width: `${stats.totalUnits > 0 ? (stats.totalLogoUnits / stats.totalUnits) * 100 : 50}%` }}
-                    className="bg-orange-500 transition-all duration-500"
+                    className="bg-brand-orange transition-all duration-500"
                   />
                   <div
                     style={{ width: `${stats.totalUnits > 0 ? (stats.totalPlainUnits / stats.totalUnits) * 100 : 50}%` }}
-                    className="bg-teal-500 transition-all duration-500"
+                    className="bg-brand-teal transition-all duration-500"
                   />
                 </div>
-                <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                <div className="flex justify-between text-[10px] text-brand-text font-mono font-bold">
                   <span>{stats.totalUnits > 0 ? Math.round((stats.totalLogoUnits / stats.totalUnits) * 100) : 0}% Logo</span>
                   <span>{stats.totalUnits > 0 ? Math.round((stats.totalPlainUnits / stats.totalUnits) * 100) : 0}% Plain</span>
                 </div>
               </div>
 
               {/* Garment type compositions list */}
-              <div className="space-y-3.5 pt-4 border-t border-slate-50">
-                <span className="text-[10px] font-mono uppercase tracking-wide text-slate-400 font-bold block">Top Clothing Types Stock Levels</span>
+              <div className="space-y-3.5 pt-4 border-t border-slate-100">
+                <span className="text-[10px] font-mono uppercase tracking-wide text-brand-text font-bold block">Top Clothing Types Stock Levels</span>
                 <div className="space-y-2.5">
                   {garmentBreakdown.slice(0, 5).map(g => {
                     const percent = stats.totalUnits > 0 ? Math.round((g.total / stats.totalUnits) * 100) : 0;
                     return (
                       <div key={g.name} className="space-y-1">
-                        <div className="flex justify-between text-xs font-semibold text-slate-700">
+                        <div className="flex justify-between text-xs font-bold text-brand-secondary">
                           <span>{g.name}</span>
-                          <span>{g.total} units ({percent}% of total)</span>
+                          <span className="text-brand-text">{g.total} units ({percent}%)</span>
                         </div>
-                        <div className="w-full h-1.5 bg-slate-50 rounded-full overflow-hidden">
+                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                           <div
                             style={{ width: `${percent}%` }}
-                            className="bg-indigo-500 h-full rounded-full"
+                            className="bg-brand-primary h-full rounded-full"
                           />
                         </div>
                       </div>
                     );
                   })}
                   {garmentBreakdown.length === 0 && (
-                    <span className="text-slate-400 text-xs italic">No garments found.</span>
+                    <span className="text-brand-text text-xs italic">No garments found.</span>
                   )}
                 </div>
               </div>
             </div>
 
             {/* Graph Card 2: School Share */}
-            <div className="bg-white rounded-3xl border border-slate-100 p-6 space-y-4 shadow-sm">
-              <h4 className="font-display font-extrabold text-slate-900 text-sm tracking-tight flex items-center gap-1.5">
-                <Layers className="w-4 h-4 text-indigo-500" />
+            <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4 shadow-sm">
+              <h4 className="font-sans font-extrabold text-brand-secondary text-sm tracking-tight flex items-center gap-1.5">
+                <Layers className="w-4 h-4 text-brand-primary" />
                 School Stock Breakdown
               </h4>
-              <p className="text-xs text-slate-400">Schools representing the largest portion of badged inventory stock inside the warehouse.</p>
+              <p className="text-xs text-brand-text font-medium">Schools representing the largest portion of badged inventory stock inside the warehouse.</p>
               
               <div className="space-y-3.5 max-h-[300px] overflow-y-auto pr-1">
                 {schoolBreakdown.slice(0, 6).map(sch => {
                   const percent = stats.totalUnits > 0 ? Math.round((sch.total / stats.totalUnits) * 100) : 0;
                   return (
-                    <div key={sch.name} className="space-y-1.5 p-2 bg-slate-50/50 hover:bg-slate-50 border border-transparent hover:border-slate-100 rounded-xl transition">
-                      <div className="flex justify-between text-xs font-bold text-slate-800">
+                    <div key={sch.name} className="space-y-1.5 p-2 bg-[#F8F9FA] hover:bg-slate-100/80 border border-slate-200/50 hover:border-slate-300 rounded-xl transition">
+                      <div className="flex justify-between text-xs font-extrabold text-brand-secondary">
                         <span className="truncate max-w-[200px]">{sch.name}</span>
-                        <span>{sch.total} units <span className="text-slate-400 font-normal">({percent}%)</span></span>
+                        <span>{sch.total} units <span className="text-brand-text font-semibold">({percent}%)</span></span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden flex">
+                        <div className="flex-1 h-2 bg-slate-200/60 rounded-full overflow-hidden flex">
                           <div
                             style={{ width: `${sch.total > 0 ? (sch.logo / sch.total) * 100 : 0}%` }}
-                            className="bg-orange-500 h-full"
+                            className="bg-brand-orange h-full"
                             title="Logo items portion"
                           />
                           <div
                             style={{ width: `${sch.total > 0 ? (sch.plain / sch.total) * 100 : 0}%` }}
-                            className="bg-teal-500 h-full"
+                            className="bg-brand-teal h-full"
                             title="Plain items portion"
                           />
                         </div>
-                        <span className="text-[9px] font-mono text-slate-400 whitespace-nowrap">
+                        <span className="text-[9px] font-mono font-bold text-brand-text whitespace-nowrap">
                           {sch.logo}L &bull; {sch.plain}P
                         </span>
                       </div>
@@ -1385,7 +1368,7 @@ export default function InventoryWorkspace({
                   );
                 })}
                 {schoolBreakdown.length === 0 && (
-                  <span className="text-slate-400 text-xs italic block text-center py-10">No school data recorded.</span>
+                  <span className="text-brand-text text-xs italic block text-center py-10">No school data recorded.</span>
                 )}
               </div>
             </div>

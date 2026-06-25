@@ -1,28 +1,48 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Space Grotesk", sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  /* Exact color matching from your live website image */
+  --color-brand-primary: #F37123;      /* Your deep signature Orange */
+  --color-brand-secondary: #581C7C;    /* Your "King's Award" Dark Purple */
+  --color-brand-text: #333333;         /* Deep readable charcoal gray */
+  --color-brand-accent: #00BBB6;       /* The "Donate/Free" crisp Teal */
+  --color-brand-blue: #00A3E0;         /* The middle bright blue icon button */
+  --color-brand-yellow: #FFCD00;       /* The "Social Impact" gold yellow */
   
-  --color-primary: #3d9e26;
-  --color-primary-hover: #2c7f1a;
-  --color-secondary: #ee8022;
-  --color-secondary-hover: #d26d15;
-  --color-accent-purple: #5b21b6;
+  --color-bg-app: #FDFEFE;             /* Clean warm white surface */
+  --color-bg-card: #FFFFFF;            /* Pure card backing */
+  --color-border-color: #F1F3F5;       /* Subtle dividing rows */
+
+  --font-sans: 'Outfit', sans-serif;
+  --font-serif: 'Fredoka', sans-serif; /* Pushes the friendly rounded header structure */
 }
 
-body {
-  font-family: var(--font-sans);
-  background-color: #f8fafc;
-  color: #0f172a;
-}
+@utility bg-brand-primary { background-color: #F37123; }
+@utility bg-brand-secondary { background-color: #581C7C; }
+@utility bg-brand-teal { background-color: #00BBB6; }
+@utility bg-brand-blue { background-color: #00A3E0; }
+@utility bg-brand-orange { background-color: #F37123; }
+@utility bg-brand-yellow { background-color: #FFCD00; }
 
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-display);
-}
+@utility text-brand-primary { color: #F37123; }
+@utility text-brand-secondary { color: #581C7C; }
+@utility text-brand-text { color: #7A7A7A; }
+@utility text-brand-teal { color: #00BBB6; }
+@utility text-brand-blue { color: #00A3E0; }
+@utility text-brand-orange { color: #F37123; }
+@utility text-brand-yellow { color: #FFCD00; }
 
-.mono-text {
-  font-family: var(--font-mono);
+@utility border-brand-primary { border-color: #F37123; }
+@utility border-brand-secondary { border-color: #581C7C; }
+
+@layer base {
+  body {
+    background-color: var(--color-bg-app);
+    color: var(--color-brand-text);
+    font-family: var(--font-sans);
+  }
+  h1, h2, h3, h4 {
+    font-family: var(--font-serif);
+    font-weight: 700;
+  }
 }

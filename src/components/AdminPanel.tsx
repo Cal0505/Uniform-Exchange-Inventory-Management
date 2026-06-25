@@ -1,15 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { School, ClothingType, Size, Colour, Location, Category, ItemType } from '../types';
-import { db, handleFirestoreError, OperationType } from '../firebase';
-import { collection, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { 
-  seedAllSizes, seedAllClothingTypes, seedSchools, seedColours, clearInventoryToZero 
-} from '../customSeeder';
+import { db } from '../firebase';
+import { collection, addDoc, doc, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
+import { clearInventoryToZero } from '../customSeeder';
 import { 
   School as SchoolIcon, Shirt, Maximize2, Palette, MapPin, Trash2, Plus, 
-  AlertCircle, Sparkles, Edit2, Check, X, Upload, Download, Database, RefreshCw,
-  Layers, Settings
+  AlertCircle, Edit2, Check, X, Users, Wrench, Shield, Mail, ShieldAlert, CheckCircle
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -20,1608 +17,479 @@ interface AdminPanelProps {
   locations: Location[];
   categories: Category[];
   itemTypes: ItemType[];
+  userRole?: string;
 }
 
-type SubTabType = 'schools' | 'types' | 'sizes' | 'colours' | 'locations' | 'categories' | 'itemTypes';
+type MainTabType = 'attributes' | 'staff' | 'dev';
+type SubTabType = 'schools' | 'types' | 'sizes' | 'colours' | 'locations';
 
 export default function AdminPanel({
-  schools,
-  clothingTypes,
-  sizes,
-  colours,
-  locations,
-  categories,
-  itemTypes,
+  schools, clothingTypes, sizes, colours, locations, userRole = 'Dev'
 }: AdminPanelProps) {
+  const [activeMainTab, setActiveMainTab] = useState<MainTabType>('attributes');
   const [activeSubTab, setActiveSubTab] = useState<SubTabType>('schools');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Form states (manual SKU inputs removed as SKUs are now automatic)
+  // Form input variables
   const [schoolName, setSchoolName] = useState('');
   const [typeName, setTypeName] = useState('');
   const [sizeLabel, setSizeLabel] = useState('');
   const [colourName, setColourName] = useState('');
   const [locationName, setLocationName] = useState('');
-  const [categoryName, setCategoryName] = useState('');
-  const [itemTypeName, setItemTypeName] = useState('');
   const [locationProfile, setLocationProfile] = useState<'Pickers Shelf' | 'VacPac Storage Area'>('Pickers Shelf');
-
-  // CSV Import state
+  
+  const [newStaffEmail, setNewStaffEmail] = useState('');
+  const [newStaffRole, setNewStaffRole] = useState<'Staff' | 'Admin'>('Staff');
+  const [newStaffName, setNewStaffName] = useState(''); // 🏷️ BRAND NEW FULL NAME STATE HOOK VARIABLE
   const [importText, setImportText] = useState('');
   const [importing, setImporting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editNameValue, setEditNameValue] = useState('');
+  const [editProfileValue, setEditProfileValue] = useState<'Pickers Shelf' | 'VacPac Storage Area'>('Pickers Shelf');
 
-  // Custom metadata deletion state
   const [metadataToDelete, setMetadataToDelete] = useState<{ collectionName: string; id: string; label: string } | null>(null);
   const [isDeletingMetadata, setIsDeletingMetadata] = useState(false);
 
-  // Multi-select state
-  const [selectedMetadataIds, setSelectedMetadataIds] = useState<string[]>([]);
-  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
-  const [isBulkDeletingMetadata, setIsBulkDeletingMetadata] = useState(false);
+  // Core Directory Lists State Hooks
+  const [staffUsers, setStaffUsers] = useState<any[]>([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+  const [supportMessages, setSupportMessages] = useState<any[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
 
-  // System Database Action states
-  const [runningDbAction, setRunningDbAction] = useState<string | null>(null);
+  // 🗑️ STAFF REMOVAL SAFETY INTERACTIVE POPUP STATE HOOKS
+  const [userToDelete, setUserToDelete] = useState<{ id: string; email: string } | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
 
-  const handleDbAction = async (actionName: string, actionFn: () => Promise<void>) => {
-    setRunningDbAction(actionName);
-    setError(null);
-    setSuccess(null);
-    try {
-      await actionFn();
-      setSuccess(`Database action "${actionName}" completed successfully.`);
-      setTimeout(() => setSuccess(null), 5000);
-    } catch (err: any) {
-      setError(`Action failed: ${err.message}`);
-      setTimeout(() => setError(null), 5000);
-    } finally {
-      setRunningDbAction(null);
-    }
-  };
+  // 🔍 STAFF REPOSITORY ACTIVE DIRECTORY STATUS FILTERS Chip State
+  const [staffStatusFilter, setStaffStatusFilter] = useState<'All' | 'Active' | 'Pending' | 'Pending Setup' | 'Suspended'>('All');
 
-  // Clear selection when activeSubTab changes
+  const isDevUser = userRole === 'Dev' || userRole === 'dev';
+
+  const tabsConfig = [
+    { id: 'schools', label: 'Schools', icon: SchoolIcon, count: schools.length },
+    { id: 'types', label: 'Garment Types', icon: Shirt, count: clothingTypes.length },
+    { id: 'sizes', label: 'Sizes Option', icon: Maximize2, count: sizes.length },
+    { id: 'colours', label: 'Colours Profile', icon: Palette, count: colours.length },
+    { id: 'locations', label: 'Locations Mapping', icon: MapPin, count: locations.length },
+  ];
+
   useEffect(() => {
-    setSelectedMetadataIds([]);
-  }, [activeSubTab]);
+    if (activeMainTab === 'staff') fetchStaffUsers();
+    if (activeMainTab === 'dev' && isDevUser) fetchSupportMessages();
+  }, [activeMainTab]);
 
-  const getActiveSubTabItems = (): { id: string; label: string }[] => {
-    switch (activeSubTab) {
-      case 'schools':
-        return schools.map(s => ({ id: s.id, label: s.name }));
-      case 'types':
-        return clothingTypes.map(t => ({ id: t.id, label: t.name }));
-      case 'sizes':
-        return sizes.map(s => ({ id: s.id, label: s.label }));
-      case 'colours':
-        return colours.map(c => ({ id: c.id, label: c.name }));
-      case 'locations':
-        return locations.map(l => ({ id: l.id, label: l.name }));
-      case 'categories':
-        return categories.map(c => ({ id: c.id, label: c.name }));
-      case 'itemTypes':
-        return itemTypes.map(i => ({ id: i.id, label: i.name }));
-      default:
-        return [];
-    }
-  };
+  const cancelEdit = () => { setEditingId(null); setEditNameValue(''); };
 
-
-
-  const clearForm = () => {
-    setError(null);
-    setSchoolName('');
-    setTypeName('');
-    setSizeLabel('');
-    setColourName('');
-    setLocationName('');
-    setCategoryName('');
-    setItemTypeName('');
-    setImportText('');
-  };
-
-  // Inline edit states
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editNameValue, setEditNameValue] = useState('');
-  const [editSkuValue, setEditSkuValue] = useState('');
-  const [editProfileValue, setEditProfileValue] = useState<'Pickers Shelf' | 'VacPac Storage Area'>('Pickers Shelf');
-
-  const startEdit = (id: string, name: string, sku: string, profile?: 'Pickers Shelf' | 'VacPac Storage Area') => {
-    setEditingId(id);
-    setEditNameValue(name);
-    setEditSkuValue(sku);
+  const startEdit = (id: string, label: string, sku: string, profile?: 'Pickers Shelf' | 'VacPac Storage Area') => {
+    setEditingId(id); setEditNameValue(label);
     if (profile) setEditProfileValue(profile);
   };
 
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditNameValue('');
-    setEditSkuValue('');
+  const showNotification = (type: 'error' | 'success', message: string) => {
+    if (type === 'error') { setError(message); setTimeout(() => setError(null), 5000); }
+    else { setSuccess(message); setTimeout(() => setSuccess(null), 3000); }
   };
 
-  // Generates a unique short SKU uppercase code internally based on user-entered descriptive name/label
+  const fetchStaffUsers = async () => {
+    setLoadingStaff(true);
+    try {
+      const snap = await getDocs(collection(db, 'users'));
+      setStaffUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (e) { console.error(e); } finally { setLoadingStaff(false); }
+  };
+
+  const fetchSupportMessages = async () => {
+    setLoadingMessages(true);
+    try {
+      const snap = await getDocs(collection(db, 'support_messages'));
+      setSupportMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (e) { console.error(e); } finally { setLoadingMessages(false); }
+  };
+
+  const handleAddStaffManually = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStaffEmail.trim()) return showNotification('error', 'Staff email is required.');
+    if (!newStaffName.trim()) return showNotification('error', 'Staff full name is required.');
+    try {
+      await addDoc(collection(db, 'users'), {
+        name: newStaffName.trim(), // 💾 INJECTS REAL FULL NAME VALUE INTO MANUALLY ADDED DATA
+        email: newStaffEmail.trim().toLowerCase(),
+        role: newStaffRole,
+        status: 'Pending Setup'
+      });
+      showNotification('success', 'Staff email whitelisted as Pending Setup.');
+      setNewStaffEmail(''); setNewStaffName(''); fetchStaffUsers();
+    } catch (e: any) { showNotification('error', e.message); }
+  };
+
+
+  const handleApproveUserStatus = async (userId: string) => {
+    try {
+      await updateDoc(doc(db, 'users', userId), { status: 'Active' });
+      showNotification('success', 'Staff profile approved and activated.');
+      fetchStaffUsers();
+    } catch (e: any) { showNotification('error', e.message); }
+  };
+
+  const handleUpdateRole = async (userId: string, currentRole: string) => {
+    const nextRole = currentRole === 'Admin' ? 'Staff' : 'Admin';
+    try {
+      await updateDoc(doc(db, 'users', userId), { role: nextRole });
+      showNotification('success', 'Staff clearances updated.'); fetchStaffUsers();
+    } catch (e: any) { showNotification('error', e.message); }
+  };
+
+  const handleToggleUserStatus = async (userId: string, currentStatus: string) => {
+    const nextStatus = currentStatus === 'Suspended' ? 'Active' : 'Suspended';
+    try {
+      await updateDoc(doc(db, 'users', userId), { status: nextStatus });
+      showNotification('success', 'Staff status toggled.'); fetchStaffUsers();
+    } catch (e: any) { showNotification('error', e.message); }
+  };
+
+  const handleDeleteSupportMessage = async (msgId: string) => {
+    try {
+      await deleteDoc(doc(db, 'support_messages', msgId));
+      showNotification('success', 'Support ticket cleared successfully.');
+      fetchSupportMessages();
+    } catch (e: any) { showNotification('error', e.message); }
+  };
+
+  const handlePermanentDeleteUser = async () => {
+    if (!userToDelete) return;
+    setIsDeletingUser(true);
+    try {
+      await deleteDoc(doc(db, 'users', userToDelete.id));
+      showNotification('success', `Permanently deleted account: ${userToDelete.email}`);
+      setUserToDelete(null); fetchStaffUsers();
+    } catch (e: any) { showNotification('error', 'Account termination error: ' + e.message); } 
+    finally { setIsDeletingUser(false); }
+  };
   const generateUniqueSku = (name: string, type: SubTabType): string => {
     let base = name.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (!base) {
-      base = 'META';
-    }
+    if (!base) base = 'META';
     base = base.substring(0, 6);
-    let sku = base;
-    let counter = 1;
+    let sku = base; let counter = 1;
     let existingSkus: string[] = [];
-    if (type === 'schools') {
-      existingSkus = schools.map(s => s.skuCode);
-    } else if (type === 'types') {
-      existingSkus = clothingTypes.map(t => t.skuCode);
-    } else if (type === 'sizes') {
-      existingSkus = sizes.map(s => s.skuCode);
-    } else if (type === 'colours') {
-      existingSkus = colours.map(c => c.skuCode);
-    } else if (type === 'locations') {
-      existingSkus = locations.map(l => l.skuCode);
-    } else if (type === 'categories') {
-      existingSkus = categories.map(c => c.skuCode);
-    } else if (type === 'itemTypes') {
-      existingSkus = itemTypes.map(i => i.skuCode);
-    }
+    if (type === 'schools') existingSkus = schools.map(s => s.skuCode);
+    else if (type === 'types') existingSkus = clothingTypes.map(t => t.skuCode);
+    else if (type === 'sizes') existingSkus = sizes.map(s => s.skuCode);
+    else if (type === 'colours') existingSkus = colours.map(c => c.skuCode);
+    else if (type === 'locations') existingSkus = locations.map(l => l.skuCode);
 
-    while (existingSkus.includes(sku)) {
-      sku = `${base.substring(0, 5)}${counter}`;
-      counter++;
-    }
+    while (existingSkus.includes(sku)) { sku = `${base.substring(0, 5)}${counter}`; counter++; }
     return sku;
   };
 
   const handleSaveEdit = async (collectionName: string, id: string) => {
-    if (!editNameValue.trim()) {
-      return showNotification('error', 'The name or label is required.');
-    }
-
+    if (!editNameValue.trim()) return showNotification('error', 'The entry field cannot be blank.');
     try {
       const updateData: any = {};
-      if (collectionName === 'sizes') {
-        updateData.label = editNameValue.trim();
-      } else {
-        updateData.name = editNameValue.trim();
-      }
-      if (collectionName === 'locations') {
-        updateData.ruleProfile = editProfileValue;
-      }
-
+      if (collectionName === 'sizes') updateData.label = editNameValue.trim();
+      else updateData.name = editNameValue.trim();
+      if (collectionName === 'locations') updateData.ruleProfile = editProfileValue;
       await updateDoc(doc(db, collectionName, id), updateData);
-      showNotification('success', 'Metadata mapping updated successfully.');
-      setEditingId(null);
-    } catch (err: any) {
-      handleFirestoreError(err, OperationType.UPDATE, `${collectionName}/${id}`);
-      showNotification('error', 'Error updating record: ' + err.message);
-    }
+      showNotification('success', 'Metadata mapping updated.'); setEditingId(null);
+    } catch (err: any) { showNotification('error', err.message); }
   };
 
-  const showNotification = (type: 'error' | 'success', message: string) => {
-    if (type === 'error') {
-      setError(message);
-      setTimeout(() => setError(null), 5000);
-    } else {
-      setSuccess(message);
-      setTimeout(() => setSuccess(null), 3000);
-    }
-  };
-
-  const handleAddSchool = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!schoolName.trim()) {
-      return showNotification('error', 'School Name is required.');
-    }
-
-    // Auto generate the internal SKU code
-    const skuCode = generateUniqueSku(schoolName, 'schools');
-
+  const executeAddMetadata = async (e: React.FormEvent, type: SubTabType, val: string) => {
+    e.preventDefault(); if (!val.trim()) return showNotification('error', 'Entry cannot be empty.');
+    const colMap = type === 'types' ? 'clothingTypes' : type;
     try {
-      await addDoc(collection(db, 'schools'), {
-        name: schoolName.trim(),
-        skuCode,
-      });
-      showNotification('success', 'School metadata added successfully.');
-      clearForm();
-    } catch (err: any) {
-      handleFirestoreError(err, OperationType.CREATE, 'schools');
-      showNotification('error', 'Error adding record to Firestore: ' + err.message);
-    }
+      const data: any = type === 'sizes' ? { label: val.trim() } : { name: val.trim() };
+      data.skuCode = generateUniqueSku(val, type);
+      if (type === 'locations') data.ruleProfile = locationProfile;
+      await addDoc(collection(db, colMap), data);
+      showNotification('success', 'Mapping generated.');
+      setSchoolName(''); setTypeName(''); setSizeLabel(''); setColourName(''); setLocationName('');
+    } catch (err: any) { showNotification('error', err.message); }
   };
-
-  const handleAddType = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!typeName.trim()) {
-      return showNotification('error', 'Clothing Type Name is required.');
-    }
-
-    const skuCode = generateUniqueSku(typeName, 'types');
-
-    try {
-      await addDoc(collection(db, 'clothingTypes'), {
-        name: typeName.trim(),
-        skuCode,
-      });
-      showNotification('success', 'Clothing Type metadata added successfully.');
-      clearForm();
-    } catch (err: any) {
-      handleFirestoreError(err, OperationType.CREATE, 'clothingTypes');
-      showNotification('error', 'Error adding record to Firestore: ' + err.message);
-    }
-  };
-
-  const handleAddSize = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!sizeLabel.trim()) {
-      return showNotification('error', 'Size Label is required.');
-    }
-
-    const skuCode = generateUniqueSku(sizeLabel, 'sizes');
-
-    try {
-      await addDoc(collection(db, 'sizes'), {
-        label: sizeLabel.trim(),
-        skuCode,
-      });
-      showNotification('success', 'Size metadata added successfully.');
-      clearForm();
-    } catch (err: any) {
-      handleFirestoreError(err, OperationType.CREATE, 'sizes');
-      showNotification('error', 'Error adding record to Firestore: ' + err.message);
-    }
-  };
-
-  const handleAddColour = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!colourName.trim()) {
-      return showNotification('error', 'Colour Name is required.');
-    }
-
-    const skuCode = generateUniqueSku(colourName, 'colours');
-
-    try {
-      await addDoc(collection(db, 'colours'), {
-        name: colourName.trim(),
-        skuCode,
-      });
-      showNotification('success', 'Colour metadata added successfully.');
-      clearForm();
-    } catch (err: any) {
-      handleFirestoreError(err, OperationType.CREATE, 'colours');
-      showNotification('error', 'Error adding record to Firestore: ' + err.message);
-    }
-  };
-
-  const handleAddLocation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!locationName.trim()) {
-      return showNotification('error', 'Location Name is required.');
-    }
-
-    const skuCode = generateUniqueSku(locationName, 'locations');
-
-    try {
-      await addDoc(collection(db, 'locations'), {
-        name: locationName.trim(),
-        skuCode,
-        ruleProfile: locationProfile,
-      });
-      showNotification('success', 'Location metadata added successfully.');
-      clearForm();
-    } catch (err: any) {
-      handleFirestoreError(err, OperationType.CREATE, 'locations');
-      showNotification('error', 'Error adding record to Firestore: ' + err.message);
-    }
-  };
-
-  const handleAddCategory = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!categoryName.trim()) {
-      return showNotification('error', 'Category Name is required.');
-    }
-
-    const skuCode = generateUniqueSku(categoryName, 'categories');
-
-    try {
-      await addDoc(collection(db, 'categories'), {
-        name: categoryName.trim(),
-        skuCode,
-      });
-      showNotification('success', 'Category metadata added successfully.');
-      clearForm();
-    } catch (err: any) {
-      handleFirestoreError(err, OperationType.CREATE, 'categories');
-      showNotification('error', 'Error adding Category: ' + err.message);
-    }
-  };
-
-  const handleAddItemType = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!itemTypeName.trim()) {
-      return showNotification('error', 'Item Type Name is required.');
-    }
-
-    const skuCode = generateUniqueSku(itemTypeName, 'itemTypes');
-
-    try {
-      await addDoc(collection(db, 'itemTypes'), {
-        name: itemTypeName.trim(),
-        skuCode,
-      });
-      showNotification('success', 'Item Type metadata added successfully.');
-      clearForm();
-    } catch (err: any) {
-      handleFirestoreError(err, OperationType.CREATE, 'itemTypes');
-      showNotification('error', 'Error adding Item Type: ' + err.message);
-    }
-  };
-
-  const handleDelete = (collectionName: string, id: string, label: string) => {
-    setMetadataToDelete({ collectionName, id, label });
-  };
-
-  const confirmDeleteMetadata = async () => {
-    if (!metadataToDelete) return;
-    setIsDeletingMetadata(true);
-    try {
-      await deleteDoc(doc(db, metadataToDelete.collectionName, metadataToDelete.id));
-      showNotification('success', 'Record deleted successfully from metadata.');
-      setMetadataToDelete(null);
-    } catch (err: any) {
-      try {
-        handleFirestoreError(err, OperationType.DELETE, `${metadataToDelete.collectionName}/${metadataToDelete.id}`);
-      } catch (firestoreErr: any) {
-        showNotification('error', 'Error deleting record: ' + firestoreErr.message);
-      }
-    } finally {
-      setIsDeletingMetadata(false);
-    }
-  };
-
-  const handleOpenBulkDelete = () => {
-    if (selectedMetadataIds.length > 0) {
-      setShowBulkDeleteModal(true);
-    }
-  };
-
-  const confirmBulkDeleteMetadata = async () => {
-    if (selectedMetadataIds.length === 0) return;
-    setIsBulkDeletingMetadata(true);
-    try {
-      const collectionName = activeSubTab === 'types' ? 'clothingTypes' : activeSubTab;
-      await Promise.all(
-        selectedMetadataIds.map((id) => deleteDoc(doc(db, collectionName, id)))
-      );
-      showNotification('success', `Successfully deleted ${selectedMetadataIds.length} records.`);
-      setSelectedMetadataIds([]);
-      setShowBulkDeleteModal(false);
-    } catch (err: any) {
-      showNotification('error', `Error deleting records: ${err.message}`);
-    } finally {
-      setIsBulkDeletingMetadata(false);
-    }
-  };
-
-  const tabsConfig = [
-    { id: 'schools' as SubTabType, label: 'Schools', icon: SchoolIcon, count: schools.length },
-    { id: 'types' as SubTabType, label: 'Clothing Types', icon: Shirt, count: clothingTypes.length },
-    { id: 'sizes' as SubTabType, label: 'Sizes', icon: Maximize2, count: sizes.length },
-    { id: 'colours' as SubTabType, label: 'Colours', icon: Palette, count: colours.length },
-    { id: 'locations' as SubTabType, label: 'Locations', icon: MapPin, count: locations.length },
-    { id: 'categories' as SubTabType, label: 'Category', icon: Layers, count: categories.length },
-    { id: 'itemTypes' as SubTabType, label: 'Item Type', icon: Settings, count: itemTypes.length },
-  ];
 
   const handleExportCSV = () => {
-    let headers = '';
-    let rows = '';
-    let filename = '';
-
-    if (activeSubTab === 'schools') {
-      headers = 'School Name\n';
-      rows = schools.map(s => `"${s.name.replace(/"/g, '""')}"`).join('\n');
-      filename = 'schools_export.csv';
-    } else if (activeSubTab === 'types') {
-      headers = 'Garment Type\n';
-      rows = clothingTypes.map(t => `"${t.name.replace(/"/g, '""')}"`).join('\n');
-      filename = 'garment_types_export.csv';
-    } else if (activeSubTab === 'sizes') {
-      headers = 'Size Option\n';
-      rows = sizes.map(s => `"${s.label.replace(/"/g, '""')}"`).join('\n');
-      filename = 'sizes_export.csv';
-    } else if (activeSubTab === 'colours') {
-      headers = 'Colour\n';
-      rows = colours.map(c => `"${c.name.replace(/"/g, '""')}"`).join('\n');
-      filename = 'colours_export.csv';
-    } else if (activeSubTab === 'locations') {
-      headers = 'Location Name,Rule Profile\n';
-      rows = locations.map(l => `"${l.name.replace(/"/g, '""')}","${l.ruleProfile}"`).join('\n');
-      filename = 'locations_export.csv';
-    } else if (activeSubTab === 'categories') {
-      headers = 'Category Name\n';
-      rows = categories.map(c => `"${c.name.replace(/"/g, '""')}"`).join('\n');
-      filename = 'categories_export.csv';
-    } else if (activeSubTab === 'itemTypes') {
-      headers = 'Item Type Name\n';
-      rows = itemTypes.map(i => `"${i.name.replace(/"/g, '""')}"`).join('\n');
-      filename = 'item_types_export.csv';
-    }
-
-    const csvContent = headers + rows;
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showNotification('success', `Exported ${filename} successfully.`);
+    let headers = ''; let rows = ''; let filename = `${activeSubTab}_export.csv`;
+    if (activeSubTab === 'schools') { headers = 'School Name\n'; rows = schools.map(s => `"${s.name}"`).join('\n'); }
+    else if (activeSubTab === 'types') { headers = 'Garment Type\n'; rows = clothingTypes.map(t => `"${t.name}"`).join('\n'); }
+    else if (activeSubTab === 'sizes') { headers = 'Size Option\n'; rows = sizes.map(s => `"${s.label}"`).join('\n'); }
+    else if (activeSubTab === 'colours') { headers = 'Colour\n'; rows = colours.map(c => `"${c.name}"`).join('\n'); }
+    else if (activeSubTab === 'locations') { headers = 'Location Name,Rule Profile\n'; rows = locations.map(l => `"${l.name}","${l.ruleProfile}"`).join('\n'); }
+    const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob); const link = document.createElement('a');
+    link.setAttribute('href', url); link.setAttribute('download', filename); link.click();
   };
-
   const handleImportCSV = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!importText.trim()) {
-      return showNotification('error', 'Please paste some CSV data or names to import.');
-    }
-
-    setImporting(true);
-    let count = 0;
+    e.preventDefault(); if (!importText.trim()) return showNotification('error', 'Please paste some CSV data.');
+    setImporting(true); let count = 0;
     try {
       const lines = importText.split('\n').map(l => l.trim()).filter(Boolean);
-      const collectionName = activeSubTab === 'schools' ? 'schools'
-                           : activeSubTab === 'types' ? 'clothingTypes'
-                           : activeSubTab === 'sizes' ? 'sizes'
-                           : activeSubTab === 'colours' ? 'colours'
-                           : activeSubTab === 'categories' ? 'categories'
-                           : activeSubTab === 'itemTypes' ? 'itemTypes'
-                           : 'locations';
-
-      // Load existing SKUs to avoid duplicates during import loop
-      let existingSkus: string[] = [];
-      if (activeSubTab === 'schools') existingSkus = schools.map(s => s.skuCode);
-      else if (activeSubTab === 'types') existingSkus = clothingTypes.map(t => t.skuCode);
-      else if (activeSubTab === 'sizes') existingSkus = sizes.map(s => s.skuCode);
-      else if (activeSubTab === 'colours') existingSkus = colours.map(c => c.skuCode);
-      else if (activeSubTab === 'locations') existingSkus = locations.map(l => l.skuCode);
-      else if (activeSubTab === 'categories') existingSkus = categories.map(c => c.skuCode);
-      else if (activeSubTab === 'itemTypes') existingSkus = itemTypes.map(i => i.skuCode);
-
+      const collectionName = activeSubTab === 'schools' ? 'schools' : activeSubTab === 'types' ? 'clothingTypes' : activeSubTab === 'sizes' ? 'sizes' : activeSubTab === 'colours' ? 'colours' : 'locations';
       for (let line of lines) {
-        let parts = line.split(',').map(p => p.trim().replace(/^"|"$/g, ''));
-        if (parts.length === 0 || !parts[0]) continue;
-
-        const firstPartLower = parts[0].toLowerCase();
-        if (firstPartLower === 'school name' || firstPartLower === 'garment type' || firstPartLower === 'size option' || firstPartLower === 'colour' || firstPartLower === 'location name' || firstPartLower === 'name' || firstPartLower === 'label') {
-          continue;
-        }
-
-        const nameValue = parts[0];
-        const sku = generateUniqueSku(nameValue, activeSubTab);
-        existingSkus.push(sku);
-
+        let parts = line.split(',').map(p => p.trim().replace(/^"|"$/g, '')); if (parts.length === 0 || !parts) continue;
+        const nameValue = parts; if (nameValue.toLowerCase().includes('name') || nameValue.toLowerCase().includes('label')) continue;
         const data: any = {};
-        if (activeSubTab === 'sizes') {
-          if (sizes.some(s => s.label.toLowerCase() === nameValue.toLowerCase())) continue;
-          data.label = nameValue;
-        } else {
-          if (activeSubTab === 'schools' && schools.some(s => s.name.toLowerCase() === nameValue.toLowerCase())) continue;
-          if (activeSubTab === 'types' && clothingTypes.some(t => t.name.toLowerCase() === nameValue.toLowerCase())) continue;
-          if (activeSubTab === 'colours' && colours.some(c => c.name.toLowerCase() === nameValue.toLowerCase())) continue;
-          if (activeSubTab === 'locations' && locations.some(l => l.name.toLowerCase() === nameValue.toLowerCase())) continue;
-          if (activeSubTab === 'categories' && categories.some(c => c.name.toLowerCase() === nameValue.toLowerCase())) continue;
-          if (activeSubTab === 'itemTypes' && itemTypes.some(i => i.name.toLowerCase() === nameValue.toLowerCase())) continue;
-          data.name = nameValue;
-        }
-
-        data.skuCode = sku;
-
-        if (activeSubTab === 'locations') {
-          const rawProfile = parts[1] || 'Pickers Shelf';
-          data.ruleProfile = rawProfile.toLowerCase().includes('vac') ? 'VacPac Storage Area' : 'Pickers Shelf';
-        }
-
-        await addDoc(collection(db, collectionName), data);
-        count++;
+        if (activeSubTab === 'sizes') data.label = nameValue; else data.name = nameValue;
+        data.skuCode = generateUniqueSku(nameValue, activeSubTab);
+        if (activeSubTab === 'locations') data.ruleProfile = (parts || '').toLowerCase().includes('vac') ? 'VacPac Storage Area' : 'Pickers Shelf';
+        await addDoc(collection(db, collectionName), data); count++;
       }
+      showNotification('success', `Bulk imported ${count} items.`); setImportText('');
+    } catch (err: any) { showNotification('error', err.message); } finally { setImporting(false); }
+  };
 
-      showNotification('success', `Imported ${count} records successfully.`);
-      setImportText('');
-    } catch (err: any) {
-      showNotification('error', `Import failed: ${err.message}`);
-    } finally {
-      setImporting(false);
+  const getActiveSubTabItems = (): { id: string; label: string; sku: string; profile?: string }[] => {
+    switch (activeSubTab) {
+      case 'schools': return schools.map(s => ({ id: s.id, label: s.name, sku: s.skuCode }));
+      case 'types': return clothingTypes.map(t => ({ id: t.id, label: t.name, sku: t.skuCode }));
+      case 'sizes': return sizes.map(s => ({ id: s.id, label: s.label, sku: s.skuCode }));
+      case 'colours': return colours.map(c => ({ id: c.id, label: c.name, sku: c.skuCode }));
+      case 'locations': return locations.map(l => ({ id: l.id, label: l.name, sku: l.skuCode, profile: l.ruleProfile }));
+      default: return [];
     }
   };
 
   const activeItems = getActiveSubTabItems();
+  const handleDeleteMetadata = (collectionName: string, id: string, label: string) => { setMetadataToDelete({ collectionName, id, label }); };
+  const confirmDeleteMetadata = async () => {
+    if (!metadataToDelete) return; setIsDeletingMetadata(true);
+    try {
+      await deleteDoc(doc(db, metadataToDelete.collectionName, metadataToDelete.id));
+      showNotification('success', 'Item mapping permanently deleted.'); setMetadataToDelete(null);
+    } catch (e: any) { showNotification('error', 'Deletion failed: ' + e.message); } finally { setIsDeletingMetadata(false); }
+  };
 
   return (
-    <div id="admin-panel" className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-      {/* Tab Navigation */}
-      <div className="border-b border-slate-100 bg-slate-50/50 p-2 sm:p-4">
-        <div className="flex flex-wrap gap-2">
-          {tabsConfig.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeSubTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                id={`tab-${tab.id}`}
-                onClick={() => {
-                  setActiveSubTab(tab.id);
-                  clearForm();
-                }}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  isActive
-                    ? 'bg-slate-900 text-white shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                <span>{tab.label}</span>
-                <span
-                  className={`text-xs px-1.5 py-0.5 rounded-full ${
-                    isActive ? 'bg-slate-800 text-slate-200' : 'bg-slate-200/60 text-slate-600'
-                  }`}
-                >
-                  {tab.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+    <div id="admin-panel" className="bg-white rounded-3xl border border-slate-200 shadow-md overflow-hidden text-left">
+      <div className="border-b border-slate-200 bg-slate-50/50 p-4 flex flex-wrap gap-3">
+        <button type="button" onClick={() => setActiveMainTab('attributes')} className={`px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer transition ${activeMainTab === 'attributes' ? 'bg-brand-primary text-white border-brand-primary shadow-xs' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>🎛️ Stock Attributes</button>
+        <button type="button" onClick={() => setActiveMainTab('staff')} className={`px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer flex items-center gap-1.5 transition ${activeMainTab === 'staff' ? 'bg-brand-primary text-white border-brand-primary shadow-xs' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}><Users className="w-3.5 h-3.5" /><span>Manage Staff</span></button>
+        {isDevUser && <button type="button" onClick={() => setActiveMainTab('dev')} className={`px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer flex items-center gap-1.5 transition ${activeMainTab === 'dev' ? 'bg-brand-secondary text-white border-brand-secondary shadow-xs' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}><Wrench className="w-3.5 h-3.5" /><span>Dev Tools</span></button>}
       </div>
-
-      <div className="p-6">
-        {/* Alerts and Notices */}
-        <AnimatePresence mode="wait">
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="flex items-center gap-2.5 p-4 mb-6 bg-red-50 border border-red-100 text-red-700 rounded-xl text-sm"
-              id="admin-alert-error"
-            >
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{error}</span>
-            </motion.div>
-          )}
-
-          {success && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="flex items-center gap-2.5 p-4 mb-6 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl text-sm"
-              id="admin-alert-success"
-            >
-              <Sparkles className="w-4 h-4 shrink-0" />
-              <span>{success}</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            {/* Add Form Container */}
-            <div className="lg:col-span-5 bg-slate-50 p-6 rounded-2xl border border-slate-100 h-fit">
-              <h3 className="text-base font-semibold text-slate-950 mb-4 flex items-center gap-2">
-                <Plus className="w-4 h-4 text-indigo-600" />
-                <span>Add {tabsConfig.find(t => t.id === activeSubTab)?.label} Mapping</span>
-              </h3>
-
-              {/* School Form */}
-              {activeSubTab === 'schools' && (
-                <form onSubmit={handleAddSchool} className="space-y-4" id="form-schools">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                      School Name
-                    </label>
-                    <input
-                      type="text"
-                      value={schoolName}
-                      onChange={(e) => setSchoolName(e.target.value)}
-                      placeholder="e.g. All Hallows Primary"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
-                      required
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-medium transition shadow-sm flex items-center justify-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" /> Save Mapping
-                  </button>
-                </form>
-              )}
-
-              {/* Clothing Type Form */}
-              {activeSubTab === 'types' && (
-                <form onSubmit={handleAddType} className="space-y-4" id="form-types">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Garment Type Name
-                    </label>
-                    <input
-                      type="text"
-                      value={typeName}
-                      onChange={(e) => setTypeName(e.target.value)}
-                      placeholder="e.g. Unisex Polo Shirts"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
-                      required
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-medium transition shadow-sm flex items-center justify-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" /> Save Mapping
-                  </button>
-                </form>
-              )}
-
-              {/* Size Form */}
-              {activeSubTab === 'sizes' && (
-                <form onSubmit={handleAddSize} className="space-y-4" id="form-sizes">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Size Label
-                    </label>
-                    <input
-                      type="text"
-                      value={sizeLabel}
-                      onChange={(e) => setSizeLabel(e.target.value)}
-                      placeholder="e.g. 3-4yrs or M"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
-                      required
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-medium transition shadow-sm flex items-center justify-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" /> Save Mapping
-                  </button>
-                </form>
-              )}
-
-              {/* Colour Form */}
-              {activeSubTab === 'colours' && (
-                <form onSubmit={handleAddColour} className="space-y-4" id="form-colours">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Colour Name
-                    </label>
-                    <input
-                      type="text"
-                      value={colourName}
-                      onChange={(e) => setColourName(e.target.value)}
-                      placeholder="e.g. Red"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
-                      required
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-medium transition shadow-sm flex items-center justify-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" /> Save Mapping
-                  </button>
-                </form>
-              )}
-
-              {/* Location Form */}
-              {activeSubTab === 'locations' && (
-                <form onSubmit={handleAddLocation} className="space-y-4" id="form-locations">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Location Name
-                    </label>
-                    <input
-                      type="text"
-                      value={locationName}
-                      onChange={(e) => setLocationName(e.target.value)}
-                      placeholder="e.g. Under Office"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
-                      Location Rule Profile
-                    </label>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        id="profile-pickers-shelf"
-                        onClick={() => setLocationProfile('Pickers Shelf')}
-                        className={`flex-1 py-2 px-3 rounded-xl text-xs font-medium border transition-all ${
-                          locationProfile === 'Pickers Shelf'
-                            ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm'
-                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        Pickers Shelf
-                        <span className="block text-[10px] font-normal text-indigo-500 mt-0.5">Loose Single Items</span>
-                      </button>
-                      <button
-                        type="button"
-                        id="profile-vacpac"
-                        onClick={() => setLocationProfile('VacPac Storage Area')}
-                        className={`flex-1 py-2 px-3 rounded-xl text-xs font-medium border transition-all ${
-                          locationProfile === 'VacPac Storage Area'
-                            ? 'bg-purple-50 border-purple-200 text-purple-700 shadow-sm'
-                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        VacPac Storage Area
-                        <span className="block text-[10px] font-normal text-purple-500 mt-0.5">Vacuum Bulk Packs</span>
-                      </button>
-                    </div>
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-medium transition shadow-sm flex items-center justify-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" /> Save Mapping
-                  </button>
-                </form>
-              )}
-
-              {/* Category Form */}
-              {activeSubTab === 'categories' && (
-                <form onSubmit={handleAddCategory} className="space-y-4" id="form-categories">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Category Name
-                    </label>
-                    <input
-                      type="text"
-                      value={categoryName}
-                      onChange={(e) => setCategoryName(e.target.value)}
-                      placeholder="e.g. Logo, Plain"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
-                      required
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-medium transition shadow-sm flex items-center justify-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" /> Save Mapping
-                  </button>
-                </form>
-              )}
-
-              {/* Item Type Form */}
-              {activeSubTab === 'itemTypes' && (
-                <form onSubmit={handleAddItemType} className="space-y-4" id="form-itemTypes">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Item Type Name
-                    </label>
-                    <input
-                      type="text"
-                      value={itemTypeName}
-                      onChange={(e) => setItemTypeName(e.target.value)}
-                      placeholder="e.g. single, vacpac"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
-                      required
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-medium transition shadow-sm flex items-center justify-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" /> Save Mapping
-                  </button>
-                </form>
-              )}
-
-              {/* Import & Export Card */}
-              <div className="mt-6 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-50 pb-3">
-                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                    <Database className="w-4 h-4 text-slate-500" />
-                    <span>Import / Export CSV</span>
-                  </h4>
-                  <button
-                    onClick={handleExportCSV}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold rounded-lg text-xs transition border border-slate-100"
-                    title="Export Current to CSV"
-                  >
-                    <Download className="w-3.5 h-3.5" /> Export
-                  </button>
-                </div>
-
-                <form onSubmit={handleImportCSV} className="space-y-3">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">
-                      Paste Names (one per line) or CSV Text:
-                    </label>
-                    <textarea
-                      value={importText}
-                      onChange={(e) => setImportText(e.target.value)}
-                      placeholder={
-                        activeSubTab === 'locations'
-                          ? "e.g.\nShelving Unit A,Pickers Shelf\nZone B Storage,VacPac Storage Area"
-                          : "e.g.\nSchool A\nSchool B\nSchool C"
-                      }
-                      rows={3}
-                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={importing}
-                    className="w-full py-2 bg-slate-100 hover:bg-slate-200 disabled:bg-slate-50 text-slate-800 font-bold rounded-xl text-xs tracking-wide transition flex items-center justify-center gap-1.5"
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    {importing ? 'Processing Import...' : 'Run CSV Import'}
-                  </button>
-                </form>
-              </div>
-
-              {/* Master System Operations Card */}
-              <div className="mt-6 bg-rose-50/40 p-5 rounded-2xl border border-rose-100 shadow-sm space-y-4 animate-fade-in">
-                <div className="border-b border-rose-100 pb-3">
-                  <h4 className="text-xs font-bold text-rose-800 uppercase tracking-wider flex items-center gap-2">
-                    <Database className="w-4 h-4 text-rose-600" />
-                    <span>System Database Operations</span>
-                  </h4>
-                  <p className="text-[10px] text-rose-600 mt-1">
-                    Destructive master tools. Overwrites or purges database collections to standard baseline values.
-                  </p>
-                </div>
-
-                <div className="space-y-2.5">
-                  <button
-                    type="button"
-                    disabled={runningDbAction !== null}
-                    onClick={() => handleDbAction('Purge Inventory Collection', clearInventoryToZero)}
-                    className="w-full py-2 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white font-bold rounded-xl text-xs tracking-wide transition flex items-center justify-center gap-1.5 shadow-sm"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    {runningDbAction === 'Purge Inventory Collection' ? 'Purging...' : 'Clear Inventory (Reset to 0 items)'}
-                  </button>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      disabled={runningDbAction !== null}
-                      onClick={() => handleDbAction('Sync Master Sizes', seedAllSizes)}
-                      className="py-1.5 px-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold rounded-lg text-[11px] transition flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      <RefreshCw className="w-3 h-3 text-slate-500 animate-spin-slow" />
-                      Sync Master Sizes
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={runningDbAction !== null}
-                      onClick={() => handleDbAction('Sync Master Types', seedAllClothingTypes)}
-                      className="py-1.5 px-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold rounded-lg text-[11px] transition flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      <RefreshCw className="w-3 h-3 text-slate-500 animate-spin-slow" />
-                      Sync Master Types
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={runningDbAction !== null}
-                      onClick={() => handleDbAction('Sync Master Schools', seedSchools)}
-                      className="py-1.5 px-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold rounded-lg text-[11px] transition flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      <RefreshCw className="w-3 h-3 text-slate-500 animate-spin-slow" />
-                      Sync Schools
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={runningDbAction !== null}
-                      onClick={() => handleDbAction('Sync Master Colours', seedColours)}
-                      className="py-1.5 px-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold rounded-lg text-[11px] transition flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      <RefreshCw className="w-3 h-3 text-slate-500 animate-spin-slow" />
-                      Sync Colours
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-          {/* List Display Container */}
-          <div className="lg:col-span-7">
-            <div className="flex items-center justify-between mb-4 h-9">
-              <h3 className="text-base font-semibold text-slate-950">
-                Current Registered {tabsConfig.find(t => t.id === activeSubTab)?.label}
-              </h3>
-              <AnimatePresence>
-                {selectedMetadataIds.length > 0 && (
-                  <motion.button
-                    initial={{ opacity: 0, scale: 0.95, y: -5 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: -5 }}
-                    onClick={handleOpenBulkDelete}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 font-bold rounded-xl text-xs transition border border-red-200/50 shadow-sm"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Delete Selected ({selectedMetadataIds.length})</span>
-                  </motion.button>
+      {activeMainTab === 'attributes' && (
+        <div className="divide-y divide-slate-100">
+          <div className="bg-white px-4 py-2 flex flex-wrap gap-2">
+            {tabsConfig.map((tab) => {
+              const Icon = tab.icon; const isActive = activeSubTab === tab.id;
+              return (
+                <button key={tab.id} onClick={() => { setActiveSubTab(tab.id as SubTabType); cancelEdit(); }} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition ${isActive ? 'bg-brand-yellow text-slate-900 border border-brand-yellow' : 'text-slate-600 hover:bg-slate-100 border border-transparent'}`}><Icon className="w-3.5 h-3.5" /><span>{tab.label}</span><span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500">{tab.count}</span></button>
+              );
+            })}
+          </div>
+          
+          <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="bg-slate-50/60 border border-slate-200/60 p-5 rounded-2xl h-fit space-y-4">
+              <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Register New Option</h4>
+              <form onSubmit={(e) => executeAddMetadata(e, activeSubTab, activeSubTab === 'schools' ? schoolName : activeSubTab === 'types' ? typeName : activeSubTab === 'sizes' ? sizeLabel : activeSubTab === 'colours' ? colourName : locationName)} className="space-y-3">
+                <input type="text" value={activeSubTab === 'schools' ? schoolName : activeSubTab === 'types' ? typeName : activeSubTab === 'sizes' ? sizeLabel : activeSubTab === 'colours' ? colourName : locationName} onChange={(e) => activeSubTab === 'schools' ? setSchoolName(e.target.value) : activeSubTab === 'types' ? setTypeName(e.target.value) : activeSubTab === 'sizes' ? setSizeLabel(e.target.value) : activeSubTab === 'colours' ? setColourName(e.target.value) : setLocationName(e.target.value)} placeholder={`Type new ${activeSubTab} option...`} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-brand-primary focus:outline-none" />
+                {activeSubTab === 'locations' && (
+                  <select value={locationProfile} onChange={(e) => setLocationProfile(e.target.value as any)} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none">
+                    <option value="Pickers Shelf">Pickers Shelf Profile</option>
+                    <option value="VacPac Storage Area">VacPac Storage Profile</option>
+                  </select>
                 )}
-              </AnimatePresence>
+                <button type="submit" className="w-full py-2.5 px-4 bg-brand-primary text-white font-bold rounded-xl text-xs shadow-xs cursor-pointer">Add Component Option</button>
+              </form>
+              <div className="border-t border-slate-200/60 pt-4 space-y-2">
+                <span className="text-[10px] uppercase font-mono font-bold text-slate-500 block">📥 Bulk CSV Utility</span>
+                <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="Paste CSV spreadsheet raw columns right here..." rows={2} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:ring-1 focus:ring-brand-primary" />
+                <div className="flex gap-2"><button type="button" onClick={handleImportCSV} disabled={importing} className="flex-1 py-2 bg-slate-900 text-white font-bold rounded-xl text-[11px] disabled:opacity-50">{importing ? 'Loading...' : 'Import CSV'}</button><button type="button" onClick={handleExportCSV} className="flex-1 py-2 bg-white text-slate-700 font-bold rounded-xl border text-[11px] hover:bg-slate-50">Export CSV</button></div>
+              </div>
             </div>
-
-            <div className="overflow-x-auto border border-slate-100 rounded-2xl bg-white shadow-sm">
-              <table className="w-full text-left text-sm text-slate-600">
-                <thead className="bg-slate-50/50 text-xs font-semibold text-slate-700 uppercase tracking-wider border-b border-slate-100">
-                  <tr>
-                    <th className="px-5 py-3 w-12 text-center">
-                      <input
-                        type="checkbox"
-                        checked={activeItems.length > 0 && selectedMetadataIds.length === activeItems.length}
-                        ref={(el) => {
-                          if (el) {
-                            el.indeterminate = selectedMetadataIds.length > 0 && selectedMetadataIds.length < activeItems.length;
-                          }
-                        }}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedMetadataIds(activeItems.map((item) => item.id));
-                          } else {
-                            setSelectedMetadataIds([]);
-                          }
-                        }}
-                        className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 transition cursor-pointer"
-                      />
-                    </th>
-                    {activeSubTab === 'schools' && (
-                      <>
-                        <th className="px-5 py-3">School Name</th>
-                        <th className="px-5 py-3 text-right">Action</th>
-                      </>
-                    )}
-                    {activeSubTab === 'types' && (
-                      <>
-                        <th className="px-5 py-3">Garment Type Name</th>
-                        <th className="px-5 py-3 text-right">Action</th>
-                      </>
-                    )}
-                    {activeSubTab === 'sizes' && (
-                      <>
-                        <th className="px-5 py-3">Size Label</th>
-                        <th className="px-5 py-3 text-right">Action</th>
-                      </>
-                    )}
-                    {activeSubTab === 'colours' && (
-                      <>
-                        <th className="px-5 py-3">Colour Name</th>
-                        <th className="px-5 py-3 text-right">Action</th>
-                      </>
-                    )}
-                    {activeSubTab === 'locations' && (
-                      <>
-                        <th className="px-5 py-3">Location Name</th>
-                        <th className="px-5 py-3">Rule Profile</th>
-                        <th className="px-5 py-3 text-right">Action</th>
-                      </>
-                    )}
-                    {activeSubTab === 'categories' && (
-                      <>
-                        <th className="px-5 py-3">Category Name</th>
-                        <th className="px-5 py-3 text-right">Action</th>
-                      </>
-                    )}
-                    {activeSubTab === 'itemTypes' && (
-                      <>
-                        <th className="px-5 py-3">Item Type Name</th>
-                        <th className="px-5 py-3 text-right">Action</th>
-                      </>
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {activeSubTab === 'schools' && schools.map((s) => {
-                    const isEditing = editingId === s.id;
-                    return isEditing ? (
-                      <tr key={s.id} className="bg-indigo-50/10">
-                        <td className="px-5 py-2"></td>
-                        <td className="px-5 py-2">
-                          <input
-                            type="text"
-                            value={editNameValue}
-                            onChange={(e) => setEditNameValue(e.target.value)}
-                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          />
-                        </td>
-                        <td className="px-5 py-2 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              onClick={() => handleSaveEdit('schools', s.id)}
-                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
-                              title="Save Changes"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={cancelEdit}
-                              className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition"
-                              title="Cancel"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      <tr key={s.id} className="hover:bg-slate-50/40 transition">
-                        <td className="px-5 py-3.5 text-center w-12">
-                          <input
-                            type="checkbox"
-                            checked={selectedMetadataIds.includes(s.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedMetadataIds((prev) => [...prev, s.id]);
-                              } else {
-                                setSelectedMetadataIds((prev) => prev.filter((id) => id !== s.id));
-                              }
-                            }}
-                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 transition cursor-pointer"
-                          />
-                        </td>
-                        <td className="px-5 py-3.5 font-medium text-slate-900">{s.name}</td>
-                        <td className="px-5 py-3.5 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              onClick={() => startEdit(s.id, s.name, s.skuCode)}
-                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
-                              title="Edit Mapping"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete('schools', s.id, s.name)}
-                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                              title="Delete Mapping"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {activeSubTab === 'types' && clothingTypes.map((t) => {
-                    const isEditing = editingId === t.id;
-                    return isEditing ? (
-                      <tr key={t.id} className="bg-indigo-50/10">
-                        <td className="px-5 py-2"></td>
-                        <td className="px-5 py-2">
-                          <input
-                            type="text"
-                            value={editNameValue}
-                            onChange={(e) => setEditNameValue(e.target.value)}
-                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          />
-                        </td>
-                        <td className="px-5 py-2 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              onClick={() => handleSaveEdit('clothingTypes', t.id)}
-                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
-                              title="Save Changes"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={cancelEdit}
-                              className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition"
-                              title="Cancel"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      <tr key={t.id} className="hover:bg-slate-50/40 transition">
-                        <td className="px-5 py-3.5 text-center w-12">
-                          <input
-                            type="checkbox"
-                            checked={selectedMetadataIds.includes(t.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedMetadataIds((prev) => [...prev, t.id]);
-                              } else {
-                                setSelectedMetadataIds((prev) => prev.filter((id) => id !== t.id));
-                              }
-                            }}
-                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 transition cursor-pointer"
-                          />
-                        </td>
-                        <td className="px-5 py-3.5 font-medium text-slate-900">{t.name}</td>
-                        <td className="px-5 py-3.5 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              onClick={() => startEdit(t.id, t.name, t.skuCode)}
-                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
-                              title="Edit Mapping"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete('clothingTypes', t.id, t.name)}
-                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                              title="Delete Mapping"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {activeSubTab === 'sizes' && sizes.map((s) => {
-                    const isEditing = editingId === s.id;
-                    return isEditing ? (
-                      <tr key={s.id} className="bg-indigo-50/10">
-                        <td className="px-5 py-2"></td>
-                        <td className="px-5 py-2">
-                          <input
-                            type="text"
-                            value={editNameValue}
-                            onChange={(e) => setEditNameValue(e.target.value)}
-                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          />
-                        </td>
-                        <td className="px-5 py-2 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              onClick={() => handleSaveEdit('sizes', s.id)}
-                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
-                              title="Save Changes"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={cancelEdit}
-                              className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition"
-                              title="Cancel"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      <tr key={s.id} className="hover:bg-slate-50/40 transition">
-                        <td className="px-5 py-3.5 text-center w-12">
-                          <input
-                            type="checkbox"
-                            checked={selectedMetadataIds.includes(s.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedMetadataIds((prev) => [...prev, s.id]);
-                              } else {
-                                setSelectedMetadataIds((prev) => prev.filter((id) => id !== s.id));
-                              }
-                            }}
-                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 transition cursor-pointer"
-                          />
-                        </td>
-                        <td className="px-5 py-3.5 font-medium text-slate-900">{s.label}</td>
-                        <td className="px-5 py-3.5 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              onClick={() => startEdit(s.id, s.label, s.skuCode)}
-                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
-                              title="Edit Mapping"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete('sizes', s.id, s.label)}
-                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                              title="Delete Mapping"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {activeSubTab === 'colours' && colours.map((c) => {
-                    const isEditing = editingId === c.id;
-                    return isEditing ? (
-                      <tr key={c.id} className="bg-indigo-50/10">
-                        <td className="px-5 py-2"></td>
-                        <td className="px-5 py-2">
-                          <input
-                            type="text"
-                            value={editNameValue}
-                            onChange={(e) => setEditNameValue(e.target.value)}
-                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          />
-                        </td>
-                        <td className="px-5 py-2 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              onClick={() => handleSaveEdit('colours', c.id)}
-                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
-                              title="Save Changes"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={cancelEdit}
-                              className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition"
-                              title="Cancel"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      <tr key={c.id} className="hover:bg-slate-50/40 transition">
-                        <td className="px-5 py-3.5 text-center w-12">
-                          <input
-                            type="checkbox"
-                            checked={selectedMetadataIds.includes(c.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedMetadataIds((prev) => [...prev, c.id]);
-                              } else {
-                                setSelectedMetadataIds((prev) => prev.filter((id) => id !== c.id));
-                              }
-                            }}
-                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 transition cursor-pointer"
-                          />
-                        </td>
-                        <td className="px-5 py-3.5 font-medium text-slate-900">{c.name}</td>
-                        <td className="px-5 py-3.5 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              onClick={() => startEdit(c.id, c.name, c.skuCode)}
-                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
-                              title="Edit Mapping"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete('colours', c.id, c.name)}
-                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                              title="Delete Mapping"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {activeSubTab === 'locations' && locations.map((l) => {
-                    const isEditing = editingId === l.id;
-                    return isEditing ? (
-                      <tr key={l.id} className="bg-indigo-50/10">
-                        <td className="px-5 py-2"></td>
-                        <td className="px-5 py-2">
-                          <input
-                            type="text"
-                            value={editNameValue}
-                            onChange={(e) => setEditNameValue(e.target.value)}
-                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          />
-                        </td>
-                        <td className="px-5 py-2">
-                          <select
-                            value={editProfileValue}
-                            onChange={(e) => setEditProfileValue(e.target.value as any)}
-                            className="px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 font-medium"
-                          >
-                            <option value="Pickers Shelf">Pickers Shelf</option>
-                            <option value="VacPac Storage Area">VacPac Storage Area</option>
-                          </select>
-                        </td>
-                        <td className="px-5 py-2 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              onClick={() => handleSaveEdit('locations', l.id)}
-                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
-                              title="Save Changes"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={cancelEdit}
-                              className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition"
-                              title="Cancel"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      <tr key={l.id} className="hover:bg-slate-50/40 transition">
-                        <td className="px-5 py-3.5 text-center w-12">
-                          <input
-                            type="checkbox"
-                            checked={selectedMetadataIds.includes(l.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedMetadataIds((prev) => [...prev, l.id]);
-                              } else {
-                                setSelectedMetadataIds((prev) => prev.filter((id) => id !== l.id));
-                              }
-                            }}
-                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 transition cursor-pointer"
-                          />
-                        </td>
-                        <td className="px-5 py-3.5 font-medium text-slate-900">{l.name}</td>
-                        <td className="px-5 py-3.5">
-                          <span
-                            className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                              l.ruleProfile === 'Pickers Shelf'
-                                ? 'bg-blue-50 text-blue-700 border border-blue-100'
-                                : 'bg-purple-50 text-purple-700 border border-purple-100'
-                            }`}
-                          >
-                            {l.ruleProfile}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3.5 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              onClick={() => startEdit(l.id, l.name, l.skuCode, l.ruleProfile)}
-                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
-                              title="Edit Mapping"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete('locations', l.id, l.name)}
-                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                              title="Delete Mapping"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {activeSubTab === 'categories' && categories.map((c) => {
-                    const isEditing = editingId === c.id;
-                    return isEditing ? (
-                      <tr key={c.id} className="bg-indigo-50/10">
-                        <td className="px-5 py-2"></td>
-                        <td className="px-5 py-2">
-                          <input
-                            type="text"
-                            value={editNameValue}
-                            onChange={(e) => setEditNameValue(e.target.value)}
-                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          />
-                        </td>
-                        <td className="px-5 py-2 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              onClick={() => handleSaveEdit('categories', c.id)}
-                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
-                              title="Save Changes"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={cancelEdit}
-                              className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition"
-                              title="Cancel"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      <tr key={c.id} className="hover:bg-slate-50/40 transition">
-                        <td className="px-5 py-3.5 text-center w-12">
-                          <input
-                            type="checkbox"
-                            checked={selectedMetadataIds.includes(c.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedMetadataIds((prev) => [...prev, c.id]);
-                              } else {
-                                setSelectedMetadataIds((prev) => prev.filter((id) => id !== c.id));
-                              }
-                            }}
-                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 transition cursor-pointer"
-                          />
-                        </td>
-                        <td className="px-5 py-3.5 font-medium text-slate-900">{c.name}</td>
-                        <td className="px-5 py-3.5 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              onClick={() => startEdit(c.id, c.name, c.skuCode)}
-                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
-                              title="Edit Mapping"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete('categories', c.id, c.name)}
-                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                              title="Delete Mapping"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {activeSubTab === 'itemTypes' && itemTypes.map((i) => {
-                    const isEditing = editingId === i.id;
-                    return isEditing ? (
-                      <tr key={i.id} className="bg-indigo-50/10">
-                        <td className="px-5 py-2"></td>
-                        <td className="px-5 py-2">
-                          <input
-                            type="text"
-                            value={editNameValue}
-                            onChange={(e) => setEditNameValue(e.target.value)}
-                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          />
-                        </td>
-                        <td className="px-5 py-2 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              onClick={() => handleSaveEdit('itemTypes', i.id)}
-                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
-                              title="Save Changes"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={cancelEdit}
-                              className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition"
-                              title="Cancel"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      <tr key={i.id} className="hover:bg-slate-50/40 transition">
-                        <td className="px-5 py-3.5 text-center w-12">
-                          <input
-                            type="checkbox"
-                            checked={selectedMetadataIds.includes(i.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedMetadataIds((prev) => [...prev, i.id]);
-                              } else {
-                                setSelectedMetadataIds((prev) => prev.filter((id) => id !== i.id));
-                              }
-                            }}
-                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 transition cursor-pointer"
-                          />
-                        </td>
-                        <td className="px-5 py-3.5 font-medium text-slate-900">{i.name}</td>
-                        <td className="px-5 py-3.5 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              onClick={() => startEdit(i.id, i.name, i.skuCode)}
-                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
-                              title="Edit Mapping"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete('itemTypes', i.id, i.name)}
-                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                              title="Delete Mapping"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {activeSubTab === 'schools' && schools.length === 0 && (
-                    <tr><td colSpan={3} className="text-center py-8 text-slate-400">No schools registered yet.</td></tr>
-                  )}
-                  {activeSubTab === 'types' && clothingTypes.length === 0 && (
-                    <tr><td colSpan={3} className="text-center py-8 text-slate-400">No clothing types registered yet.</td></tr>
-                  )}
-                  {activeSubTab === 'sizes' && sizes.length === 0 && (
-                    <tr><td colSpan={3} className="text-center py-8 text-slate-400">No sizes registered yet.</td></tr>
-                  )}
-                  {activeSubTab === 'colours' && colours.length === 0 && (
-                    <tr><td colSpan={3} className="text-center py-8 text-slate-400">No colours registered yet.</td></tr>
-                  )}
-                  {activeSubTab === 'locations' && locations.length === 0 && (
-                    <tr><td colSpan={4} className="text-center py-8 text-slate-400">No locations registered yet.</td></tr>
-                  )}
-                  {activeSubTab === 'categories' && categories.length === 0 && (
-                    <tr><td colSpan={3} className="text-center py-8 text-slate-400">No categories registered yet.</td></tr>
-                  )}
-                  {activeSubTab === 'itemTypes' && itemTypes.length === 0 && (
-                    <tr><td colSpan={3} className="text-center py-8 text-slate-400">No item types registered yet.</td></tr>
-                  )}
-                </tbody>
-              </table>
+            
+            <div className="lg:col-span-2 space-y-4">
+              <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Active Configuration Parameters</h4>
+              <div className="overflow-hidden border border-slate-200 bg-white rounded-2xl shadow-xs">
+                <table className="w-full text-left text-xs text-slate-600">
+                  <thead className="bg-slate-50 text-slate-700 font-bold"><tr><th className="px-4 py-3">Component Identifier Label</th>{activeSubTab === 'locations' && <th className="px-4 py-3">Rule Profile</th>}<th className="px-4 py-3 text-right">Actions</th></tr></thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {activeItems.map((item) => {
+                      const isEditing = editingId === item.id;
+                      return (
+                        <tr key={item.id} className="hover:bg-slate-50/40 transition">
+                          <td className="px-4 py-3 font-medium text-slate-900">
+                            {isEditing ? <input type="text" value={editNameValue} onChange={(e) => setEditNameValue(e.target.value)} className="p-1.5 border border-slate-200 rounded-lg text-xs bg-white w-full max-w-xs focus:outline-none focus:ring-1 focus:ring-brand-primary" /> : item.label}
+                          </td>
+                          {activeSubTab === 'locations' && (
+                            <td className="px-4 py-3 text-slate-500">
+                              {isEditing ? <select value={editProfileValue} onChange={(e) => setEditProfileValue(e.target.value as any)} className="p-1.5 border border-slate-200 rounded-lg text-xs bg-white"><option value="Pickers Shelf">Pickers Shelf</option><option value="VacPac Storage Area">VacPac Storage Area</option></select> : item.profile}
+                            </td>
+                          )}
+                          <td className="px-4 py-3 text-right">
+                            {isEditing ? (
+                              <div className="flex justify-end gap-1"><button type="button" onClick={() => handleSaveEdit(activeSubTab === 'types' ? 'clothingTypes' : activeSubTab, item.id)} className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-lg"><Check className="w-4 h-4" /></button><button type="button" onClick={cancelEdit} className="p-1 text-slate-400 hover:bg-slate-100 rounded-lg"><X className="w-4 h-4" /></button></div>
+                            ) : (
+                              <div className="flex justify-end gap-1"><button type="button" onClick={() => startEdit(item.id, item.label, item.sku, item.profile as any)} className="p-1 text-slate-400 hover:text-brand-primary hover:bg-slate-50 rounded-lg"><Edit2 className="w-3.5 h-3.5" /></button><button type="button" onClick={() => handleDeleteMetadata(activeSubTab === 'types' ? 'clothingTypes' : activeSubTab, item.id, item.label)} className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-3.5 h-3.5" /></button></div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {activeItems.length === 0 && <tr><td colSpan={3} className="text-center py-8 text-slate-400">No layout parameters configured yet.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
+      {activeMainTab === 'staff' && (
+        <div className="p-6 space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 p-4 border border-slate-200 rounded-2xl">
+            <div><h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Add Staff Account Manually</h4><p className="text-[11px] text-slate-500 mt-0.5">Authorise workspace permissions credentials for new employees.</p></div>
+            <form onSubmit={handleAddStaffManually} className="flex flex-wrap items-center gap-2 flex-1 md:justify-end">
+              {/* 🏷️ NEW FULL NAME FORM INPUT FIELD */}
+              <input 
+                type="text" 
+                value={newStaffName} 
+                onChange={(e) => setNewStaffName(e.target.value)} 
+                placeholder="Staff Full Name" 
+                className="p-2 bg-white border border-slate-200 rounded-xl text-xs w-full max-w-[150px] focus:outline-none" 
+              />
+              <input type="email" value={newStaffEmail} onChange={(e) => setNewStaffEmail(e.target.value)} placeholder="employee@company.com" className="p-2 bg-white border border-slate-200 rounded-xl text-xs w-full max-w-xs focus:outline-none" />
+              <select value={newStaffRole} onChange={(e) => setNewStaffRole(e.target.value as any)} className="p-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none">
+                <option value="Staff">Staff Tier</option>
+                <option value="Admin">Admin Tier</option>
+                {isDevUser && <option value="Dev">Dev Tier</option>}
+              </select>
+              <button type="submit" className="py-2 px-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs shadow-xs flex items-center gap-1 cursor-pointer"><Plus className="w-3.5 h-3.5" /> Add Staff</button>
+            </form>
 
-      {/* CUSTOM METADATA DELETE CONFIRMATION MODAL */}
-      <AnimatePresence>
-        {metadataToDelete && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm">
-            <div className="absolute inset-0" onClick={() => !isDeletingMetadata && setMetadataToDelete(null)} />
+          </div>
 
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-3xl shadow-2xl max-w-md w-full border border-slate-100 overflow-hidden relative z-10 text-left"
-            >
-              <div className="bg-red-600 p-5 text-white flex justify-between items-center">
-                <div>
-                  <h3 className="font-bold text-sm tracking-wide">Confirm Metadata Delete</h3>
-                  <p className="text-[10px] text-red-100 mt-0.5">May affect existing stock items mapping</p>
-                </div>
-                <button
-                  onClick={() => !isDeletingMetadata && setMetadataToDelete(null)}
-                  className="p-1 rounded-lg text-red-200 hover:text-white hover:bg-red-700 transition"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <h4 className="font-serif font-black text-slate-900 text-base tracking-tight">Active Staff Directory Registry</h4>
+              <p className="text-xs text-slate-500 mt-0.5">Modify permission parameters or filter active team directories.</p>
+            </div>
+            
+            {/* 🎛️ STATUS FILTER CHIPS CONTROLS ROW */}
+            <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-xl border w-fit">
+              {(['All', 'Active', 'Pending', 'Pending Setup', 'Suspended'] as const).map((filter) => {
+                const isCurrent = staffStatusFilter === filter;
+                const count = filter === 'All' ? staffUsers.length : staffUsers.filter(u => u.status === filter || (filter === 'Active' && !u.status)).length;
+                return (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setStaffStatusFilter(filter)}
+                    className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black tracking-tight transition cursor-pointer ${
+                      isCurrent ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                    }`}
+                  >
+                    {filter === 'Pending' ? 'Approval Req' : filter}
+                    <span className={`ml-1 px-1 py-0.5 rounded text-[9px] ${isCurrent ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-500'}`}>{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {loadingStaff ? <div className="py-12 text-center text-xs font-mono text-slate-400 animate-pulse">Gathering directory security cards...</div> : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {staffUsers
+                .filter(u => staffStatusFilter === 'All' || u.status === staffStatusFilter || (staffStatusFilter === 'Active' && !u.status))
+                .map((u: any) => {
+                  const isTargetDev = u.role === 'Dev' || u.role === 'dev';
+                  const isPending = u.status === 'Pending';
+                  return (
+                    <div key={u.id} className={`bg-white border p-5 rounded-2xl shadow-xs space-y-4 flex flex-col justify-between transition ${u.status === 'Suspended' ? 'border-red-200 bg-red-50/10' : isTargetDev ? 'border-indigo-200 bg-indigo-50/5' : isPending ? 'border-orange-200 bg-orange-50/5 animate-pulse' : u.status === 'Pending Setup' ? 'border-amber-200 bg-amber-50/5' : 'border-slate-200/80 hover:border-slate-300'}`}>
+                      <div className="space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${isTargetDev ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : u.role === 'Admin' ? 'bg-orange-100 text-orange-800 border border-orange-200' : 'bg-slate-100 text-slate-700 border border-slate-200'}`}>{u.role || 'Staff'}</span>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${u.status === 'Suspended' ? 'bg-red-100 text-red-700' : isPending ? 'bg-orange-100 text-orange-800' : u.status === 'Pending Setup' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}><span className={`w-1.5 h-1.5 rounded-full ${u.status === 'Suspended' ? 'bg-red-500' : isPending ? 'bg-orange-500' : u.status === 'Pending Setup' ? 'bg-amber-500' : 'bg-emerald-500'}`} />{u.status || 'Active'}</span>
+                            {!isTargetDev && (
+                              <button type="button" onClick={() => setUserToDelete({ id: u.id, email: u.email })} className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer" title="Delete Account Profile permanently"><Trash2 className="w-3.5 h-3.5" /></button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2.5 pt-1">
+                          <div className="p-2 bg-slate-100 rounded-xl text-slate-600 flex-shrink-0"><Mail className="w-4 h-4" /></div>
+                          <div className="overflow-hidden">
+                            {/* 🏷️ HIGHLIGHTED FIX: PROMINENT FULL NAME DISPLAY HEADER */}
+                            <span className="block text-xs font-black text-slate-900 truncate tracking-tight" title={u.name || 'Awaiting Activation'}>
+                              {u.name || 'Awaiting Activation'}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-medium block truncate mt-0.5" title={u.email}>
+                              {u.email}
+                            </span>
+                            <span className="text-[9px] text-slate-400 block mt-0.5 font-mono tracking-wider">
+                              ID: {u.id.substring(0,8).toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+                        {isPending ? (
+                          <button type="button" onClick={() => handleApproveUserStatus(u.id)} className="col-span-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[10px] flex items-center justify-center gap-1 cursor-pointer transition shadow-xs"><Check className="w-3 h-3" /> Approve Profile</button>
+                        ) : (
+                          <>
+                            <button type="button" disabled={isTargetDev} onClick={() => handleUpdateRole(u.id, u.role)} className="py-1.5 px-2 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 font-bold border border-slate-200 rounded-xl text-[10px] flex items-center justify-center gap-1 cursor-pointer"><Shield className="w-3 h-3" /> {isTargetDev ? 'Dev Locked' : 'Toggle Rank'}</button>
+                            <button type="button" disabled={isTargetDev} onClick={() => handleToggleUserStatus(u.id, u.status)} className={`py-1.5 px-2 font-bold border rounded-xl text-[10px] flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${u.status === 'Suspended' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'}`}><ShieldAlert className="w-3 h-3" /> {isTargetDev ? 'Dev Immutable' : u.status === 'Suspended' ? 'Unsuspend' : 'Suspend'}</button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              {staffUsers.length === 0 && <div className="col-span-full py-12 border border-dashed text-center text-xs text-slate-400 rounded-2xl">No employee profiles matching criteria logs.</div>}
+            </div>
+          )}
+        </div>
+      )}
+      {/* RENDER PANEL 3: MASTER OVERRIDES CORE DEVELOPER OVERLAYS */}
+
+      {activeMainTab === 'dev' && isDevUser && (
+        <div className="p-6 space-y-6 bg-slate-950 text-slate-200 font-mono rounded-b-3xl">
+          <div>
+            <h4 className="font-mono font-bold text-brand-yellow text-sm tracking-wide">⚡ Core Database Tools & Support Log Console</h4>
+            <p className="text-[11px] text-slate-400 mt-0.5">Direct data streaming overrides and incoming user terminal assistance channels.</p>
+          </div>
+
+          <div className="p-5 bg-slate-900 border border-slate-800 rounded-2xl space-y-4">
+            <span className="text-[10px] text-brand-yellow uppercase tracking-widest font-bold block">📥 Active Technical Support Assistance Queues</span>
+            {loadingMessages ? <div className="py-6 text-center text-xs text-slate-500 animate-pulse">Gathering terminal log alerts...</div> : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {supportMessages.map((m: any) => (
+                  <div key={m.id} className="bg-slate-950 p-4 border border-slate-800 rounded-xl space-y-3 flex flex-col justify-between relative overflow-hidden">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-bold text-teal-400 truncate max-w-[180px]">{m.email}</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-black bg-red-950/40 text-red-400 border border-red-900/30 uppercase tracking-wider">{m.status || 'Unread'}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 bg-slate-900/50 p-2.5 border border-slate-900 rounded-lg font-sans leading-relaxed break-words whitespace-pre-wrap">{m.message}</p>
+                    </div>
+                    <button type="button" onClick={() => handleDeleteSupportMessage(m.id)} className="w-full py-1.5 bg-red-950/20 hover:bg-red-900/40 text-red-400 font-bold border border-red-950/50 rounded-lg text-[10px] transition cursor-pointer flex items-center justify-center gap-1"><Trash2 className="w-3 h-3" /> Clear Ticket</button>
+                  </div>
+                ))}
+                {supportMessages.length === 0 && <div className="col-span-full py-8 text-center text-xs text-slate-600 border border-dashed border-slate-800 rounded-xl">Your system support communication queue is completely empty.</div>}
               </div>
+            )}
+          </div>
 
+          <div className="p-5 bg-rose-950/20 border border-rose-900/40 rounded-2xl space-y-3">
+            <div><span className="text-[10px] text-rose-400 uppercase tracking-widest font-bold">💥 Destructive Global Purge</span><p className="text-[11px] text-slate-400 mt-0.5">Wipes inventory structures inside Firestore collections completely back to 0 items maps.</p></div>
+            <button type="button" onClick={async () => { if(confirm("Purge global entries?")) { try { await clearInventoryToZero(); alert('Purged successfully.'); } catch(e: any) { alert(e.message); } } }} className="py-2 px-4 bg-rose-600 hover:bg-rose-700 text-white font-mono font-bold rounded-xl text-xs cursor-pointer shadow-md">FORCE RESET DATABASE</button>
+          </div>
+        </div>
+      )}
+
+      {/* ⚠️ SAFETY DELETION CONFIRMATION OVERLAYS MODALS POPUPS */}
+      <AnimatePresence>
+        {userToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm">
+            <div className="absolute inset-0" onClick={() => !isDeletingUser && setUserToDelete(null)} />
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-3xl shadow-2xl max-w-md w-full border border-slate-100 overflow-hidden relative z-10 text-left">
+              <div className="bg-red-600 p-5 text-white flex justify-between items-center">
+                <h3 className="font-bold text-sm tracking-wide flex items-center gap-1.5">⚠️ Confirm Permanent Account Removal?</h3>
+                <button type="button" onClick={() => setUserToDelete(null)} className="p-1 rounded-lg text-red-200 hover:text-white transition"><X className="w-5 h-5" /></button>
+              </div>
               <div className="p-6 space-y-4">
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Are you sure you want to delete this metadata record? It may affect existing stock mapping.
-                </p>
-
-                <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-semibold text-slate-800">
-                  <span className="text-slate-400 font-normal uppercase text-[10px] block mb-1">
-                    {metadataToDelete.collectionName}
-                  </span>
-                  {metadataToDelete.label}
-                </div>
-
-                <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-                  <button
-                    type="button"
-                    disabled={isDeletingMetadata}
-                    onClick={() => setMetadataToDelete(null)}
-                    className="px-4 py-2 bg-slate-100 text-slate-600 hover:bg-slate-200 font-semibold rounded-xl text-xs transition disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={confirmDeleteMetadata}
-                    disabled={isDeletingMetadata}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl text-xs transition shadow-md flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    {isDeletingMetadata ? 'Deleting...' : 'Confirm Delete'}
-                  </button>
+                <p className="text-xs text-slate-600">Are you sure you want to permanently delete this user profile? This action will immediately terminate all access clearances inside the system portal.</p>
+                <div className="p-4 bg-slate-50 border rounded-2xl text-xs font-semibold text-slate-800">{userToDelete.email}</div>
+                <div className="flex justify-end gap-2 pt-4 border-t">
+                  <button type="button" disabled={isDeletingUser} onClick={() => setUserToDelete(null)} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold cursor-pointer">Cancel</button>
+                  <button type="button" onClick={handlePermanentDeleteUser} disabled={isDeletingUser} className="px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-bold cursor-pointer transition hover:bg-red-700 shadow-sm">Delete Account</button>
                 </div>
               </div>
             </motion.div>
@@ -1629,65 +497,18 @@ export default function AdminPanel({
         )}
       </AnimatePresence>
 
-      {/* CUSTOM METADATA BULK DELETE CONFIRMATION MODAL */}
       <AnimatePresence>
-        {showBulkDeleteModal && (
+        {metadataToDelete && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm">
-            <div className="absolute inset-0" onClick={() => !isBulkDeletingMetadata && setShowBulkDeleteModal(false)} />
-
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-3xl shadow-2xl max-w-md w-full border border-slate-100 overflow-hidden relative z-10 text-left"
-            >
-              <div className="bg-red-600 p-5 text-white flex justify-between items-center">
-                <div>
-                  <h3 className="font-bold text-sm tracking-wide">Confirm Bulk Delete</h3>
-                  <p className="text-[10px] text-red-100 mt-0.5">This will delete multiple records at once</p>
-                </div>
-                <button
-                  onClick={() => !isBulkDeletingMetadata && setShowBulkDeleteModal(false)}
-                  className="p-1 rounded-lg text-red-200 hover:text-white hover:bg-red-700 transition"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
+            <div className="absolute inset-0" onClick={() => setMetadataToDelete(null)} />
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-3xl shadow-2xl max-w-md w-full border border-slate-100 overflow-hidden relative z-10 text-left">
+              <div className="bg-red-600 p-5 text-white flex justify-between items-center"><h3 className="font-bold text-sm tracking-wide">Permanently Delete Option?</h3><button type="button" onClick={() => setMetadataToDelete(null)} className="p-1 rounded-lg text-red-200 hover:text-white transition"><X className="w-5 h-5" /></button></div>
               <div className="p-6 space-y-4">
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Are you absolutely sure you want to delete these <strong className="text-red-600 font-bold">{selectedMetadataIds.length}</strong> selected metadata records? This may affect existing stock mapping.
-                </p>
-
-                <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl max-h-40 overflow-y-auto space-y-2">
-                  <span className="text-slate-400 font-normal uppercase text-[10px] block border-b border-slate-200 pb-1 mb-1">
-                    Selected Items for Deletion ({tabsConfig.find(t => t.id === activeSubTab)?.label})
-                  </span>
-                  {activeItems.filter(item => selectedMetadataIds.includes(item.id)).map(item => (
-                    <div key={item.id} className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                      {item.label}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-                  <button
-                    type="button"
-                    disabled={isBulkDeletingMetadata}
-                    onClick={() => setShowBulkDeleteModal(false)}
-                    className="px-4 py-2 bg-slate-100 text-slate-600 hover:bg-slate-200 font-semibold rounded-xl text-xs transition disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={confirmBulkDeleteMetadata}
-                    disabled={isBulkDeletingMetadata}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl text-xs transition shadow-md flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    {isBulkDeletingMetadata ? 'Deleting...' : 'Confirm Bulk Delete'}
-                  </button>
+                <p className="text-xs text-slate-600">Are you sure you want to delete this metadata configuration record profile row?</p>
+                <div className="p-4 bg-slate-50 border rounded-2xl text-xs font-semibold text-slate-800">{metadataToDelete.label}</div>
+                <div className="flex justify-end gap-2 pt-4 border-t">
+                  <button type="button" onClick={() => setMetadataToDelete(null)} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold">Cancel</button>
+                  <button type="button" onClick={confirmDeleteMetadata} className="px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-bold">Delete Option</button>
                 </div>
               </div>
             </motion.div>

@@ -3,7 +3,7 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import InventoryWorkspace from './components/InventoryWorkspace';
 import LoginScreen from './LoginScreen'; 
-import AdminTabContainer from './AdminTabContainer'; 
+import AdminPanel from './components/AdminPanel';
 import AccountPage from './components/AccountPage'; 
 import { useFirestoreData } from './useFirestoreData'; 
 import { Layers, Settings, RefreshCw, Clock, Shirt, User, LogOut, ChevronDown, UserCheck } from 'lucide-react';
@@ -58,8 +58,13 @@ export default function App() {
         const userDoc = userSnapshot.docs[0];
         const userData = userDoc.data();
 
-        if (!userData.active) {
+        if (userData.status === 'Suspended') {
           setLoginError('Your staff account access has been suspended by an administrator.');
+          return;
+        }
+
+        if (userData.status === 'Pending') {
+          setLoginError("Your account hasn't been approved yet. Please use the Contact Support tab to resolve this issue.");
           return;
         }
 
@@ -131,93 +136,159 @@ export default function App() {
       />
     );
   }
+   // --- NEW RESPONSIVE WORKSPACE APP INTERFACE ---
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans antialiased text-slate-900">
-      <header className="bg-white border-b border-slate-100 px-6 py-4 sticky top-0 z-40 shadow-sm">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-md"><Shirt className="w-6 h-6 text-white" /></div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-1.5">
-                School Uniform Exchange
-                <span className="text-[10px] uppercase tracking-widest bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-extrabold animate-pulse">
-                  Live {userRole === 'Dev' ? 'Master Access' : 'Firestore'}
-                </span>
-              </h1>
-              <p className="text-xs text-slate-500 mt-0.5">Kirklees & Beyond Warehouse Stock Manager</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-medium">
-              <Clock className="w-3.5 h-3.5 text-slate-400" /><span>UTC Workspace</span>
-            </div>
-            
-            <div className="relative">
-              <button 
-                type="button"
-                onClick={() => setShowUserDropdown(!showUserDropdown)} 
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-medium transition-all group"
-              >
-                <User className="w-3.5 h-3.5 text-slate-500" />
-                <div className="flex flex-col items-start text-left leading-tight">
-                  <span className="font-semibold text-slate-800">{loggedInEmail}</span>
-                  <span className="text-[10px] text-blue-600 font-bold mt-0.5">Logged in as: {userRole}</span>
-                </div>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-              
-              {showUserDropdown && (
-                <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg py-1 z-50 overflow-hidden">
-                  <button 
-                    type="button"
-                    onClick={() => { setActiveTab('account'); setShowUserDropdown(false); }} 
-                    className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-all"
-                  >
-                    <UserCheck className="w-3.5 h-3.5 text-slate-400" />
-                    <span>My Account Settings</span>
-                  </button>
-                  <div className="border-t border-slate-100"></div>
-                  <button 
-                    type="button"
-                    onClick={handleSignOut} 
-                    className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-xs font-semibold text-red-600 hover:bg-red-50 transition-all"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Sign Out</span>
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <button type="button" onClick={() => window.location.reload()} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all"><RefreshCw className="w-4 h-4" /></button>
-          </div>
+    <div className="min-h-screen bg-[#F8F9FA] flex flex-col md:flex-row font-sans antialiased text-[#54595F]">
+      
+      {/* 📱 MOBILE NAVIGATION BAR (Hidden on Tablet & PC) */}
+      <header className="md:hidden bg-[#54595F] text-white px-4 py-3 flex items-center justify-between sticky top-0 z-50 shadow-md border-b-2 border-[#6EC1E4]">
+        <div className="flex items-center gap-2">
+          <Shirt className="w-5 h-5 text-[#6EC1E4]" />
+          <span className="font-bold text-sm tracking-tight text-white">Uniform Exchange</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] bg-[#6EC1E4] text-[#54595F] px-2 py-0.5 rounded font-bold uppercase">{userRole}</span>
+          <button type="button" onClick={handleSignOut} className="text-white hover:text-[#F37123] transition-colors"><LogOut className="w-4 h-4" /></button>
         </div>
       </header>
 
-      <nav className="bg-white border-b border-slate-100 px-6 py-2">
-        <div className="max-w-7xl mx-auto flex gap-4">
-          <button type="button" onClick={() => setActiveTab('workspace')} className={`pb-3 pt-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'workspace' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}><Layers className="w-4 h-4" /><span>Workspace Dashboard</span></button>
-          
-          {(userRole === 'Admin' || userRole === 'Dev') && (
-            <button type="button" onClick={() => setActiveTab('admin')} className={`pb-3 pt-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'admin' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}>
-              <Settings className="w-4 h-4" />
-              <span>Admin Panel</span>
+      {/* 💻 PERMANENT VERTICAL WEBSITE-MATCHED SIDEBAR */}
+      <aside className="hidden md:flex flex-col w-20 lg:w-64 bg-brand-primary text-white min-h-screen sticky top-0 self-start p-5 transition-all duration-300 shadow-xl">
+        
+        {/* White rounded badge mimicking your logo frame */}
+        <div className="flex items-center gap-3 lg:px-2 py-3 border-b border-white/20 justify-center lg:justify-start overflow-hidden">
+          <div className="p-2.5 bg-white text-brand-primary rounded-2xl shadow-md flex-shrink-0"><Shirt className="w-5 h-5 stroke-[2.5]" /></div>
+          <div className="hidden lg:block leading-tight">
+            <h1 className="text-base font-serif font-black text-white tracking-wide">UNIFORM</h1>
+            <p className="text-[11px] font-sans text-white uppercase tracking-widest font-bold opacity-90">EXCHANGE</p>
+          </div>
+        </div>
+
+        {/* Navigation panel links mapping system controls */}
+        <nav className="flex flex-col gap-2 mt-8 flex-1">
+          <button 
+            type="button" 
+            onClick={() => setActiveTab('workspace')} 
+            className={`w-full flex items-center justify-center lg:justify-start gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all border cursor-pointer ${
+              activeTab === 'workspace' 
+                ? 'bg-brand-yellow text-slate-900 border-brand-yellow shadow-md' 
+                : 'text-white border-transparent hover:bg-white/10'
+            }`}
+          >
+            <Layers className="w-4 h-4 flex-shrink-0" />
+            <span className="hidden lg:block">Workspace Dashboard</span>
+          </button>
+
+          {(userRole === 'Admin' || userRole === 'admin' || userRole === 'Dev') && (
+            <button 
+              type="button" 
+              onClick={() => setActiveTab('admin')} 
+              className={`w-full flex items-center justify-center lg:justify-start gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all border cursor-pointer ${
+                activeTab === 'admin' 
+                  ? 'bg-brand-yellow text-slate-900 border-brand-yellow shadow-md' 
+                  : 'text-white border-transparent hover:bg-white/10'
+              }`}
+            >
+              <Settings className="w-4 h-4 flex-shrink-0" />
+              <span className="hidden lg:block">Admin Panel</span>
             </button>
           )}
+
+          <button 
+            type="button" 
+            onClick={() => setActiveTab('account')} 
+            className={`w-full flex items-center justify-center lg:justify-start gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all border cursor-pointer ${
+              activeTab === 'account' 
+                ? 'bg-brand-yellow text-slate-900 border-brand-yellow shadow-md' 
+                : 'text-white border-transparent hover:bg-white/10'
+            }`}
+          >
+            <User className="w-4 h-4 flex-shrink-0" />
+            <span className="hidden lg:block">Account Profile</span>
+          </button>
+        </nav>
+
+        {/* 🛡️ BRAND-TUNED ACCOUNT CONTROL CENTER FOOTER CARD */}
+        <div className="bg-brand-teal p-3.5 rounded-2xl flex flex-col gap-3.5 border border-white/10 shadow-inner">
+          
+          {/* User Initial Avatar and Text Profile Block */}
+          <div className="hidden lg:flex items-center gap-3 border-b border-white/20 pb-3">
+            <div className="w-9 h-9 rounded-full bg-slate-900/10 border-2 border-white/40 flex items-center justify-center text-xs font-black text-white uppercase shadow-inner flex-shrink-0">
+              {loggedInEmail ? loggedInEmail.substring(0, 2) : 'UE'}
+            </div>
+            <div className="flex flex-col text-left leading-tight overflow-hidden">
+              <span className="text-xs font-black text-white truncate uppercase tracking-wide">
+                {loggedInEmail ? loggedInEmail.split('@')[0] : 'Staff Account'}
+              </span>
+              <span className="text-[10px] text-slate-900 font-extrabold mt-0.5 uppercase tracking-wider opacity-60">
+                {userRole} Access
+              </span>
+            </div>
+          </div>
+
+          {/* 🟢 Live Pulsing Firebase Server Status Monitor element */}
+          <div className="flex items-center justify-center lg:justify-start gap-2 py-1.5 lg:px-2.5 bg-white/10 text-white rounded-xl text-[10px] font-bold shadow-xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
+            <span className="hidden lg:block uppercase tracking-wider">Firebase Operational</span>
+          </div>
+
+          {/* Session Termination trigger */}
+          <button 
+            type="button" 
+            onClick={handleSignOut} 
+            className="w-full flex items-center justify-center lg:justify-start gap-2 px-3 py-2 bg-brand-orange text-white hover:bg-white hover:text-brand-orange rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs group"
+          >
+            <LogOut className="w-3.5 h-3.5 flex-shrink-0 group-hover:-translate-x-0.5 transition-transform" />
+            <span>Sign Out Session</span>
+          </button>
         </div>
+      </aside>
+
+      {/* 🎛️ MAIN COMPONENT LAYOUT REGION (No top horizontal headers) */}
+      <div className="flex-1 flex flex-col min-w-0 relative">
+        
+        {/* Pinned Float Button targeting mobile screen layouts to force structural refreshes inside PWA frames */}
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="md:hidden fixed bottom-20 right-4 w-12 h-12 bg-brand-primary text-white rounded-full shadow-lg border-2 border-white flex items-center justify-center z-50 transition-transform active:scale-95 cursor-pointer"
+          title="Force Sync Workspace"
+        >
+          <RefreshCw className="w-5 h-5" />
+        </button>
+
+        <main className="flex-1 p-4 md:p-8 overflow-x-hidden pb-24 md:pb-8">
+          {activeTab === 'workspace' && (
+            <InventoryWorkspace schools={schools} clothingTypes={clothingTypes} sizes={sizes} colours={colours} locations={locations} categories={categories} itemTypes={itemTypes} inventory={inventory} loading={loading} seeding={seeding} />
+          )}
+          {activeTab === 'admin' && (userRole === 'Admin' || userRole === 'admin' || userRole === 'Dev') && (
+            <AdminPanel 
+              schools={schools} 
+              clothingTypes={clothingTypes} 
+              sizes={sizes} 
+              colours={colours} 
+              locations={locations} 
+              categories={categories} 
+              itemTypes={itemTypes}
+              userRole={userRole}
+            />
+          )}
+
+          {activeTab === 'account' && (
+            <AccountPage currentRole={userRole} userEmail={loggedInEmail} userRole={userRole} />
+          )}
+        </main>
+      </div>
+
+      {/* 📱 MOBILE FOOTER NAVIGATION BAR (Stays pinned for phone screen widths) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-200 flex items-center justify-around z-50 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+        <button type="button" onClick={() => setActiveTab('workspace')} className={`flex flex-col items-center gap-1 text-[10px] font-bold w-1/3 transition-colors ${activeTab === 'workspace' ? 'text-brand-primary' : 'text-slate-400'}`}><Layers className="w-5 h-5" /><span>Workspace</span></button>
+        {(userRole === 'Admin' || userRole === 'admin' || userRole === 'Dev') && (
+          <button type="button" onClick={() => setActiveTab('admin')} className={`flex flex-col items-center gap-1 text-[10px] font-bold w-1/3 transition-colors ${activeTab === 'admin' ? 'text-brand-primary' : 'text-slate-400'}`}><Settings className="w-5 h-5" /><span>Admin</span></button>
+        )}
+        <button type="button" onClick={() => setActiveTab('account')} className={`flex flex-col items-center gap-1 text-[10px] font-bold w-1/3 transition-colors ${activeTab === 'account' ? 'text-brand-primary' : 'text-slate-400'}`}><User className="w-5 h-5" /><span>Profile</span></button>
       </nav>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-6">
-        {activeTab === 'workspace' && (
-          <InventoryWorkspace schools={schools} clothingTypes={clothingTypes} sizes={sizes} colours={colours} locations={locations} categories={categories} itemTypes={itemTypes} inventory={inventory} loading={loading} seeding={seeding} />
-        )}
-        {activeTab === 'admin' && (userRole === 'Admin' || userRole === 'Dev') && (
-          <AdminTabContainer schools={schools} clothingTypes={clothingTypes} sizes={sizes} colours={colours} locations={locations} categories={categories} itemTypes={itemTypes} />
-        )}
-        {activeTab === 'account' && (
-          <AccountPage currentRole={userRole} userEmail={loggedInEmail} userRole={userRole} />
-        )}
-      </main>
     </div>
   );
 }

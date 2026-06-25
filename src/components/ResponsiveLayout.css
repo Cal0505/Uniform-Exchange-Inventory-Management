@@ -1,0 +1,177 @@
+/* --- DESKTOP STRUCTURE --- */
+.desktop-container {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  height: 100vh;
+  width: 100vw;
+}
+
+.desktop-sidebar {
+  background-color: var(--brand-secondary);
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  border-right: 1px solid var(--border-color);
+}
+
+.sidebar-brand h2 {
+  color: var(--brand-primary);
+  font-size: 1.4rem;
+  margin-bottom: 4px;
+}
+
+.sidebar-brand p {
+  font-size: 0.85rem;
+  color: var(--brand-primary);
+  opacity: 0.8;
+}
+
+.desktop-nav-links {
+  margin-top: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex-grow: 1;
+}
+
+.desktop-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: none;
+  border: none;
+  color: #ffffff;
+  padding: 14px 16px;
+  text-align: left;
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.desktop-nav-item:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.desktop-nav-item.active {
+  background-color: var(--brand-teal);
+  font-weight: 600;
+}
+
+.desktop-signout-btn {
+  background-color: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+  padding: 12px;
+  width: 100%;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.desktop-signout-btn:hover {
+  background-color: var(--brand-orange);
+  border-color: transparent;
+}
+
+.desktop-main-content {
+  background-color: var(--bg-app);
+  padding: 40px;
+  overflow-y: auto;
+}
+
+/* --- TABLET MEDIA QUERIES (768px to 1024px) --- */
+@media (max-width: 1024px) and (min-width: 768px) {
+  .desktop-container {
+    grid-template-columns: 80px 1fr;
+  }
+  .sidebar-brand p, .desktop-label, .sidebar-footer span {
+    display: none;
+  }
+  .sidebar-brand h2 {
+    font-size: 1rem;
+    text-align: center;
+  }
+  .desktop-nav-item {
+    justify-content: center;
+    padding: 16px 0;
+  }
+}
+
+/* --- MOBILE STRUCTURE --- */
+.mobile-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+}
+
+.mobile-header {
+  height: 60px;
+  background-color: var(--brand-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  border-bottom: 2px solid var(--brand-primary);
+}
+
+.logo-text {
+  color: #ffffff;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.signout-btn-mini {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.mobile-main-content {
+  flex-grow: 1;
+  padding: 20px;
+  overflow-y: auto;
+  background-color: var(--bg-app);
+  padding-bottom: 80px; /* Space for footer nav */
+}
+
+.mobile-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 65px;
+  background-color: #ffffff;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 100;
+}
+
+.mobile-nav-item {
+  background: none;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: var(--brand-text);
+  font-size: 0.75rem;
+  cursor: pointer;
+  width: 33%;
+}
+
+.mobile-nav-item .nav-icon {
+  font-size: 1.3rem;
+  margin-bottom: 2px;
+}
+
+.mobile-nav-item.active {
+  color: var(--brand-teal);
+  font-weight: 700;
+}
