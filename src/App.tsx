@@ -333,8 +333,8 @@ export default function App() {
               sizes={advancedSizes} 
               colours={advancedColours} 
               locations={advancedLocations} 
-              categories={dataPool.categories} 
-              itemTypes={dataPool.itemTypes}
+              categories={dataPool.categories}
+              schoolClassifications={dataPool.schoolClassifications || []} 
               userRole={userRole}
             />
           )}

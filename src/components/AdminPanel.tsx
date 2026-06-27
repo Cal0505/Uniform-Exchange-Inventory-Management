@@ -1,21 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db } from '../firebase';
-import { collection, addDoc, doc, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
-import { clearInventoryToZero } from '../customSeeder';
+import { collection, addDoc, deleteDoc, doc, updateDoc, getDocs, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { storage } from '../firebase'; // 💼 LINK TO THE REBOOTED FIRESTORE CORE STORAGE CONFIG
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'; // 🖼️ UTILITIES TO CHUNK & UPLOAD LOCAL IMAGE ASSETS
+import { clearInventoryToZero, seedSchools } from '../customSeeder';
 import { 
   School as SchoolIcon, Shirt, Maximize2, Palette, MapPin, Trash2, Plus, 
-  AlertCircle, Edit2, Check, X, Users, Wrench, Shield, Mail, ShieldAlert, CheckCircle
+  AlertCircle, Edit2, Check, X, Users, Wrench, Shield, Mail, ShieldAlert, CheckCircle,
+  GripVertical, ArrowUp, ArrowDown
 } from 'lucide-react';
+
 
 // ⚙️ UPGRADED MASTER TYPES FOR DATA STRUCTURE INTERFACES
 interface AdvancedSchool {
   id: string;
   name: string;
-  schoolType: 'JIN' | 'IN' | 'M' | 'H'; // Junior Infant Nursery, Infant Nursery, Middle, High
-  schoolIdCode: string; // e.g. AHW
-  skuCode: string; // The generated combination: JINAHW
-  logoUrl?: string; // Optional crest media link URL
+  schoolType: string; // 🔓 UNLOCKED TO ALLOW ANY FLEXIBLE DESIGNATION LOGIC (e.g. NMH, JI)
+  schoolIdCode: string; 
+  skuCode: string; 
+  logoUrl?: string; 
 }
 
 interface AdvancedAttribute {
@@ -26,48 +30,105 @@ interface AdvancedAttribute {
   ruleProfile?: string; // Specific fallback modifier for locations mapping
 }
 
+// ⚙️ EXTENDED ATTRIBUTES PROP STRUCTURING WITH WEIGHTING LOGIC
+interface AdvancedSchool {
+  id: string;
+  name: string;
+  schoolType: string; 
+  schoolIdCode: string; 
+  skuCode: string; 
+  logoUrl?: string; 
+}
+
+interface AdvancedAttribute {
+  id: string;
+  name?: string; 
+  label?: string; 
+  skuCode: string; 
+  ruleProfile?: string; 
+  sortOrder?: number;        // ⚖️ Numerical weight to dynamically position tabs & checkboxes from left to right
+  sizeGroupTag?: string;     // 🏷️ Connects sizing options dynamically to specific garment categories
+  requiresSchool?: boolean;  // 🏫 Enforces whether a top-level category tab requires school crest structures
+}
+
 interface AdminPanelProps {
+  categories: AdvancedAttribute[]; // 📂 Dynamically streams your workspace navigation tabs right out of Firestore
+  schoolClassifications: AdvancedAttribute[]; // 🧬 Mutable checkbox targets (e.g. F, J, I, N, M, H)
   schools: AdvancedSchool[];
   clothingTypes: AdvancedAttribute[];
   sizes: AdvancedAttribute[];
   colours: AdvancedAttribute[];
   locations: AdvancedAttribute[];
-  categories: any[];
-  itemTypes: any[];
   userRole?: string;
 }
 
 type MainTabType = 'attributes' | 'staff' | 'dev';
-type SubTabType = 'schools' | 'types' | 'sizes' | 'colours' | 'locations';
+// 🎛️ INFINITELY EXTENDED ATTRIBUTE SUB-TAB TYPE ROUTER LITERALS
+type SubTabType = 'categories' | 'schoolClassifications' | 'schools' | 'types' | 'sizes' | 'colours' | 'locations';
 
 export default function AdminPanel({
-  schools, clothingTypes, sizes, colours, locations, userRole = 'Dev'
+  categories, schoolClassifications, schools, clothingTypes, sizes, colours, locations, userRole = 'Dev'
 }: AdminPanelProps) {
   const [activeMainTab, setActiveMainTab] = useState<MainTabType>('attributes');
-  const [activeSubTab, setActiveSubTab] = useState<SubTabType>('schools');
+  const [activeSubTab, setActiveSubTab] = useState<SubTabType>('categories'); // 📂 Defaults cleanly to Categories Tab
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // 📝 EXPANDED FORM INPUT STATES FOR DYNAMIC LOGO MEDIA STRINGS
-  const [schoolName, setSchoolName] = useState('');
-  const [schoolType, setSchoolType] = useState<'JIN' | 'IN' | 'M' | 'H'>('JIN');
-  const [schoolIdCode, setSchoolIdCode] = useState('');
-  const [schoolLogoUrl, setSchoolLogoUrl] = useState(''); // 🖼️ BRAND NEW DYNAMIC CREST ACCREDITATION URL LINK HOOK
+  // 📝 NEW MASTER CATEGORIES FORM STATE CONTROLS
+  const [categoryName, setCategoryName] = useState('');
+  const [categorySku, setCategorySku] = useState('');
+  const [categorySortOrder, setCategorySortOrder] = useState(1);
+  const [categoryRequiresSchool, setCategoryRequiresSchool] = useState(false);
 
-  // 📝 ATTRIBUTE STATE INPUT CONTROLS
+  // 📝 NEW CLASSIFICATION TYPES STATE CONTROLS
+  const [classValue, setClassValue] = useState('');
+  const [classLabelName, setClassLabelName] = useState('');
+  const [classSortOrder, setClassSortOrder] = useState(1);
+
+  // 📝 SCHOOL REGISTRY CREATION INPUTS
+  const [schoolName, setSchoolName] = useState('');
+  const [schoolIdCode, setSchoolIdCode] = useState('');
+    // 📝 SEQUENTIAL PREFIX TRACKER: Manages vertical sequential stacks for processing SKUs
+  // 📝 UNIFIED SCHOOL CLASSIFICATION MATRIX FORM CONTROLS
+  const [newClassificationLabel, setNewClassificationLabel] = useState('');
+  const [newClassificationKey, setNewClassificationKey] = useState('');
+
+  // 💾 CHECKS MEMORY SWITCH ARRAYS FOR MUTABLE LOGO PRE-SETS
+  const [selectedCreationTypes, setSelectedCreationTypes] = useState<string[]>([]);
+  const [selectedEditingTypes, setSelectedEditingTypes] = useState<string[]>([]);
+
+  // 📝 EXTENDED NO-CODE PARAMETER INPUT TARGET HOOKS
   const [customSkuSuffix, setCustomSkuSuffix] = useState(''); 
   const [attributeName, setAttributeName] = useState('');
-  const [locationProfile, setLocationProfile] = useState<'Pickers Shelf' | 'VacPac Storage Area'>('Pickers Shelf');
+  const [sizeGroupChoice, setSizeGroupChoice] = useState('YOUTH_AGE'); // 🏷️ Maps to Sizing category folder groupings
+  const [locationProfile, setLocationProfile] = useState<'Fixed Shelf' | 'VacPac Storage'>('Fixed Shelf');
+  const [vacPacNumber, setVacPacNumber] = useState(1); // 📦 Used to dynamically generate padded locations like UO01
+  const [vacPacZonePrefix, setVacPacZonePrefix] = useState('UO'); 
   
-  // 📝 EXPANDED DUAL INLINE EDIT TRACKING BUFFERS
+  // 📝 CORE INTERACTIVE DOUBLE INLINE ROWS LAYOUT BUFFERS
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNameValue, setEditNameValue] = useState('');
-  const [editSkuValue, setEditSkuValue] = useState(''); // 🔧 OVERRIDE HOOK FIELD TO FREELY AMEND BACKGROUND CODES
-  const [editProfileValue, setEditProfileValue] = useState<'Pickers Shelf' | 'VacPac Storage Area'>('Pickers Shelf');
-
-  const [editSchoolType, setEditSchoolType] = useState<'JIN' | 'IN' | 'M' | 'H'>('JIN');
+  const [editSkuValue, setEditSkuValue] = useState(''); 
+  const [editProfileValue, setEditProfileValue] = useState<'Fixed Shelf' | 'VacPac Storage'>('Fixed Shelf');
   const [editSchoolIdCode, setEditSchoolIdCode] = useState('');
   const [editSchoolLogoUrl, setEditSchoolLogoUrl] = useState('');
+  const [editSortOrder, setEditSortOrder] = useState(1);
+  const [editSizeGroupTag, setEditSizeGroupTag] = useState('YOUTH_AGE');
+  const [editRequiresSchool, setEditRequiresSchool] = useState(false);
+
+  // 💾 TEMPORARY FILE BUFFERS FOR PHYSICAL COMPUTER/PHONE IMAGE UPLOADS
+  const [selectedCreationFile, setSelectedCreationFile] = useState<File | null>(null);
+  const [selectedEditingFile, setSelectedEditingFile] = useState<File | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+    // 🛡️ DEV CONSOLE FIREWALL PASSWORD CONTROLS
+  const [devPasswordModalOpen, setDevPasswordModalOpen] = useState(false);
+  const [devPasswordInput, setDevPasswordInput] = useState('');
+  const [pendingDevAction, setPendingDevAction] = useState<'seed' | 'purge' | null>(null);
+  // 🚪 DEV OVERRIDE CONTROL: Master switch flag to enable or disable the logo 5-click bypass door
+  // 🚪 PERMANENT REPOSITORY FIREWALL LINK: Reads straight from physical disk storage state parameters
+  const [devBypassActive, setDevBypassActive] = useState<boolean>(() => {
+    return localStorage.getItem('ue_dev_bypass_flag') === 'true';
+  });
 
   // Manual Staff Addition Form States
   const [newStaffEmail, setNewStaffEmail] = useState('');
@@ -92,39 +153,154 @@ export default function AdminPanel({
 
   const isDevUser = userRole === 'Dev' || userRole === 'dev';
 
-  // 📊 COMPONENT COUNTER CHIPS ROW TEXT CONFIGURATIONS
+  // 🎛️ MASTER NO-CODE ROUTER NAVIGATION CONFIG DECK (INFINITELY EXTENDABLE ATTR SWITCHES)
   const tabsConfig = [
-    { id: 'schools', label: 'Schools Registry', icon: SchoolIcon, count: schools.length },
-    { id: 'types', label: 'Garment Types', icon: Shirt, count: clothingTypes.length },
-    { id: 'sizes', label: 'Sizes Option', icon: Maximize2, count: sizes.length },
-    { id: 'colours', label: 'Colours Profile', icon: Palette, count: colours.length },
-    { id: 'locations', label: 'Locations Mapping', icon: MapPin, count: locations.length },
+    { id: 'categories', label: 'Master Categories', icon: Shirt, count: categories?.length || 0, placeholder: 'e.g. Logo Items', skuPlaceholder: 'e.g. LOGO' },
+    { id: 'schoolClassifications', label: 'Classifications Matrix', icon: Maximize2, count: schoolClassifications?.length || 0, placeholder: 'e.g. First School', skuPlaceholder: 'e.g. F' },
+    { id: 'schools', label: 'Schools Registry', icon: SchoolIcon, count: schools.length, placeholder: 'e.g. All Hallows Primary', skuPlaceholder: 'e.g. ALHW' },
+    { id: 'types', label: 'Garment Types', icon: Shirt, count: clothingTypes.length, placeholder: 'e.g. Jumper', skuPlaceholder: 'e.g. JUMP' },
+    { id: 'sizes', label: 'Sizes Option', icon: Maximize2, count: sizes.length, placeholder: 'e.g. 7-8yrs', skuPlaceholder: 'e.g. S0708' },
+    { id: 'colours', label: 'Colours Profile', icon: Palette, count: colours.length, placeholder: 'e.g. Navy Blue', skuPlaceholder: 'e.g. NVBL' },
+    { id: 'locations', label: 'Locations Mapping', icon: MapPin, count: locations.length, placeholder: 'e.g. Upper Office Pickers', skuPlaceholder: 'e.g. UO' },
   ];
+
+  // 📡 REAL-TIME CLOUD HUB LIFECYCLE LISTENERS
+  const [cloudBypassActive, setCloudBypassActive] = useState<boolean>(false);
 
   useEffect(() => {
     if (activeMainTab === 'staff') fetchStaffUsers();
     if (activeMainTab === 'dev' && isDevUser) fetchSupportMessages();
+
+    // 🔒 Direct server document connection: forces your slider track to match your database live
+    const unsubscribe = onSnapshot(doc(db, 'system_config', 'settings'), (snapshot) => {
+      if (snapshot.exists()) {
+        const serverState = snapshot.data().dev_bypass_active === true;
+        setCloudBypassActive(serverState);
+        localStorage.setItem('ue_cloud_bypass_ui', String(serverState)); // Pre-loads login layout hooks
+      }
+    });
+
+    return () => unsubscribe(); // Unbinds the cloud data stream cleanly on unmount
   }, [activeMainTab]);
 
+
   const cancelEdit = () => { 
-    setEditingId(null); setEditNameValue(''); setEditSkuValue(''); 
-    setEditSchoolIdCode(''); setEditSchoolLogoUrl('');
+    setEditingId(null); 
+    setEditNameValue(''); 
+    setEditSkuValue(''); 
+    setEditSchoolIdCode(''); 
+    setEditSchoolLogoUrl('');
+    setEditSortOrder(1);
+    setEditSizeGroupTag('YOUTH_AGE');
+    setEditRequiresSchool(false);
+    setSelectedEditingTypes([]); 
+    setSelectedEditingFile(null); 
   };
 
   const startEdit = (item: any) => {
+    setSelectedEditingFile(null);
     setEditingId(item.id);
-    setEditNameValue(item.label || '');
-    setEditSkuValue(item.sku || '');
-    if (item.profile) setEditProfileValue(item.profile);
+    setEditNameValue(item.label || item.name || '');
+    setEditSkuValue(item.sku || item.skuCode || '');
+    if (item.profile || item.ruleProfile) setEditProfileValue(item.profile || item.ruleProfile);
     
-    // Grabs legacy data states from the active list item row properties
-    if (activeSubTab === 'schools') {
+    // 🧬 RECURSIVE SYNC: Pre-load the fresh dynamic database parameters on-click
+    if (activeSubTab === 'categories') {
+      const match = categories.find(c => c.id === item.id);
+      if (match) {
+        setEditSortOrder(match.sortOrder || 1);
+        setEditRequiresSchool(match.requiresSchool || false);
+      }
+    } else if (activeSubTab === 'schoolClassifications') {
+      const match = schoolClassifications.find(c => c.id === item.id);
+      if (match) setEditSortOrder(match.sortOrder || 1);
+    } else if (activeSubTab === 'schools') {
       const match = schools.find(s => s.id === item.id);
       if (match) {
-        setEditSchoolType(match.schoolType || 'JIN');
         setEditSchoolIdCode(match.schoolIdCode || '');
         setEditSchoolLogoUrl(match.logoUrl || '');
+        setSelectedEditingTypes(match.schoolType ? match.schoolType.split('') : []);
       }
+    } else if (activeSubTab === 'types') {
+      const match = clothingTypes.find(t => t.id === item.id);
+      if (match) setEditSizeGroupTag(match.sizeGroupTag || 'YOUTH_AGE');
+    } else if (activeSubTab === 'sizes') {
+      const match = sizes.find(s => s.id === item.id);
+      if (match) setEditSizeGroupTag(match.sizeGroupTag || 'YOUTH_AGE');
+    }
+  };
+
+  // 🧬 MATRIX STRING ASSEMBLER: Reads your mutable classifications collection and compiles left-to-right
+  const compileMatrixString = (checkedKeysList: string[]): string => {
+    return [...schoolClassifications]
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+      .map(cfg => cfg.skuCode || '')
+      .filter(key => checkedKeysList.includes(key))
+      .join('');
+  };
+
+  // ⚖️ MATRIX LAYER SWAPPER: Shuffles global sorting weights up or down in real-time
+  const handleShiftClassificationOrder = async (index: number, direction: 'up' | 'down', currentList: any[]) => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= currentList.length) return;
+
+    try {
+      setIsUploadingImage(true);
+      const itemA = currentList[index];
+      const itemB = currentList[targetIndex];
+
+      // Swap their numerical sort order weights internally
+      const weightA = itemA.sortOrder || index + 1;
+      const weightB = itemB.sortOrder || targetIndex + 1;
+
+      await Promise.all([
+        updateDoc(doc(db, 'schoolClassifications', itemA.id), { sortOrder: weightB }),
+        updateDoc(doc(db, 'schoolClassifications', itemB.id), { sortOrder: weightA })
+      ]);
+      
+      showNotification('success', 'Global classification sorting order re-aligned.');
+    } catch (err: any) {
+      showNotification('error', `Sorting shift failed: ${err.message}`);
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  // ➕ INLINE PARAMETER REGISTER: Appends a completely custom tier option straight to the database list
+  const handleAddNewClassificationOption = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanLabel = newClassificationLabel.trim();
+    const cleanKey = newClassificationKey.trim().toUpperCase().replace(/[^A-Z]/g, '');
+
+    if (!cleanLabel || !cleanKey) {
+      return showNotification('error', 'Both the Display Label and 1-Letter Key are required.');
+    }
+    if (cleanKey.length !== 1) {
+      return showNotification('error', 'The classification key must be exactly ONE single letter code.');
+    }
+
+    // Absolute duplicate blocker query check
+    if (schoolClassifications.some(c => (c.skuCode || '').toUpperCase() === cleanKey || c.name?.toLowerCase() === cleanLabel.toLowerCase())) {
+      return showNotification('error', `Registration Refused: An option with key "${cleanKey}" or name "${cleanLabel}" already exists.`);
+    }
+
+    try {
+      setIsUploadingImage(true);
+      const nextSortWeight = schoolClassifications.length + 1;
+
+      await addDoc(collection(db, 'schoolClassifications'), {
+        name: cleanLabel,
+        skuCode: cleanKey,
+        sortOrder: nextSortWeight
+      });
+
+      showNotification('success', `"${cleanLabel} (${cleanKey})" successfully integrated into option definitions.`);
+      setNewClassificationLabel('');
+      setNewClassificationKey('');
+    } catch (err: any) {
+      showNotification('error', err.message);
+    } finally {
+      setIsUploadingImage(false);
     }
   };
 
@@ -205,69 +381,253 @@ export default function AdminPanel({
     finally { setIsDeletingUser(false); }
   };
 
-   // 📡 INLINE DATABASE EDIT SAVER (UPGRADED TO CALCULATE MULTI-COLUMN SCHOOL RECORDS)
+  // 📡 INLINE DATABASE EDIT SAVER (UPGRADED FOR TICK-BOX MATRIX DESIGNATIONS)
   const handleSaveEdit = async (collectionName: string, id: string) => {
-    if (!editNameValue.trim()) return showNotification('error', 'The entry field cannot be blank.');
+    if (!editNameValue.trim()) {
+      showNotification('error', 'The display name field cannot be blank.');
+      return;
+    }
+    
     try {
       const updateData: any = {};
+      const targetedTable = collectionName === 'types' ? 'clothingTypes' : collectionName;
       
-      if (collectionName === 'schools') {
-        if (!editSchoolIdCode.trim()) return showNotification('error', 'School machine ID code is required.');
-        const recalculatedSku = `${editSchoolType}${editSchoolIdCode.trim().toUpperCase()}`;
+      if (targetedTable === 'schools') {
+        // 🧬 Compile the individual selected ticks into a strict left-to-right ordered string
+        const finalSchoolType = compileMatrixString(selectedEditingTypes);
+        const finalSchoolIdCode = editSchoolIdCode.trim().toUpperCase();
+        
+        if (!finalSchoolIdCode) {
+          showNotification('error', 'Save Cancelled: School 4-Letter Abbreviation ID is blank.');
+          return;
+        }
+        
+        const recalculatedSku = `${finalSchoolType}${finalSchoolIdCode}`;
+        setIsUploadingImage(true);
+        let dynamicCloudLogoUrl = editSchoolLogoUrl.trim();
+
+        // 🖼️ Cloud Storage Media Pipe
+        if (selectedEditingFile) {
+          try {
+            const safeSkuPath = recalculatedSku.replace(/[^A-Z0-9]/gi, '') || id;
+            dynamicCloudLogoUrl = await uploadSchoolLogo(selectedEditingFile, safeSkuPath);
+          } catch (storageErr: any) {
+            showNotification('error', `Image Cloud Storage Upload Failed: ${storageErr.message}`);
+            setIsUploadingImage(false);
+            return;
+          }
+        }
         
         updateData.name = editNameValue.trim();
-        updateData.schoolType = editSchoolType;
-        updateData.schoolIdCode = editSchoolIdCode.trim().toUpperCase();
-        updateData.skuCode = recalculatedSku; // 🔒 Recalculates master machine combination automatically
-        updateData.logoUrl = editSchoolLogoUrl.trim();
+        updateData.schoolType = finalSchoolType;
+        updateData.schoolIdCode = finalSchoolIdCode;
+        updateData.skuCode = recalculatedSku;
+        updateData.logoUrl = dynamicCloudLogoUrl;
       } else {
-        if (collectionName === 'sizes') updateData.label = editNameValue.trim();
+        if (targetedTable === 'sizes') updateData.label = editNameValue.trim();
         else updateData.name = editNameValue.trim();
         
         if (editSkuValue.trim()) {
           updateData.skuCode = editSkuValue.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
         }
-        if (collectionName === 'locations') updateData.ruleProfile = editProfileValue;
+        if (targetedTable === 'locations') updateData.ruleProfile = editProfileValue;
       }
       
-      await updateDoc(doc(db, collectionName, id), updateData);
-      showNotification('success', 'Configuration parameter dynamically updated.');
+      await updateDoc(doc(db, targetedTable, id), updateData);
+      showNotification('success', 'School record matrix cleanly updated and synchronized!');
       cancelEdit();
-    } catch (err: any) { showNotification('error', err.message); }
+    } catch (err: any) { 
+      showNotification('error', `Database Write Error: ${err.message}`); 
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  // 🖼️ CORE LOCAL STORAGE FILE UPLOADER ENGINE
+  const uploadSchoolLogo = async (file: File, finalSku: string): Promise<string> => {
+    // Force specific file name structure to automatically overwrite matching old items in free tier bucket
+    const storagePath = `school_logos/${finalSku.toUpperCase()}.png`;
+    const storageRef = ref(storage, storagePath);
+    
+    // Upload the raw byte data chunk streams directly to Google Firebase Storage cloud buckets
+    await uploadBytes(storageRef, file);
+    
+    // Snatch a secure, permanent, direct web link URL to inject straight into Firestore registry rows
+    const directDownloadUrl = await getDownloadURL(storageRef);
+    return directDownloadUrl;
   };
 
 
-  // 📡 UPDATED SOURCE ENTRY CREATOR (UPGRADED FOR OPTIONAL LOGO CREST TRACKING LINKS)
+  // 📡 NO-CODE REGISTRY INJECTOR (WITH AUTOMATED DATA CASING & BLOCKERS)
   const executeAddMetadata = async (e: React.FormEvent) => {
     e.preventDefault();
-    const colMap = activeSubTab === 'types' ? 'clothingTypes' : activeSubTab;
     
+    // Map internal tracking collections to their exact Firestore collection paths
+    let targetedCollection = activeSubTab;
+    if (activeSubTab === 'types') targetedCollection = 'clothingTypes' as any;
+    if (activeSubTab === 'schoolClassifications') targetedCollection = 'schoolClassifications' as any;
+
     try {
-      if (activeSubTab === 'schools') {
-        if (!schoolName.trim() || !schoolIdCode.trim()) return showNotification('error', 'All school layout fields are required.');
-        const combinedSchoolSku = `${schoolType}${schoolIdCode.trim().toUpperCase()}`;
+      if (activeSubTab === 'categories') {
+        if (!categoryName.trim() || !categorySku.trim()) return showNotification('error', 'Category Name and SKU Code are required.');
+        const finalName = categoryName.trim();
+        const finalSku = categorySku.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
         
+        // Absolute duplicate checker
+        if (categories.some(c => c.name?.toLowerCase() === finalName.toLowerCase() || c.skuCode === finalSku)) {
+          return showNotification('error', 'A category with this name or SKU already exists.');
+        }
+
+        await addDoc(collection(db, 'categories'), {
+          name: finalName,
+          skuCode: finalSku,
+          sortOrder: Number(categorySortOrder) || 1,
+          requiresSchool: categoryRequiresSchool
+        });
+
+      } else if (activeSubTab === 'schoolClassifications') {
+        if (!classLabelName.trim() || !classValue.trim()) return showNotification('error', 'Classification Name and Ticket Key are required.');
+        const finalKey = classValue.trim().toUpperCase().replace(/[^A-Z]/g, ''); // Enforces clean letter characters
+        
+        if (schoolClassifications.some(c => c.skuCode === finalKey || c.name?.toLowerCase() === classLabelName.trim().toLowerCase())) {
+          return showNotification('error', 'This classification key or description is already registered.');
+        }
+
+        await addDoc(collection(db, 'schoolClassifications'), {
+          name: classLabelName.trim(),
+          skuCode: finalKey,
+          sortOrder: Number(classSortOrder) || 1
+        });
+
+      } else if (activeSubTab === 'schools') {
+        if (!schoolName.trim() || !schoolIdCode.trim()) return showNotification('error', 'School Name and 4-Letter Abbreviation ID are required.');
+        const finalAbbreviation = schoolIdCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 4);
+        
+        if (finalAbbreviation.length < 4) return showNotification('error', 'School Abbreviation ID must be exactly 4 letters long.');
+        
+        const finalTypePrefix = compileMatrixString(selectedCreationTypes);
+        const combinedSchoolSku = `${finalTypePrefix}${finalAbbreviation}`;
+
+        if (schools.some(s => s.schoolIdCode === finalAbbreviation || s.name.toLowerCase() === schoolName.trim().toLowerCase())) {
+          return showNotification('error', 'This school name or abbreviation ID already exists.');
+        }
+
+        setIsUploadingImage(true);
+        let dynamicCloudLogoUrl = '';
+
+        if (selectedCreationFile) {
+          dynamicCloudLogoUrl = await uploadSchoolLogo(selectedCreationFile, combinedSchoolSku);
+        }
+
         await addDoc(collection(db, 'schools'), {
           name: schoolName.trim(),
-          schoolType: schoolType,
-          schoolIdCode: schoolIdCode.trim().toUpperCase(),
+          schoolType: finalTypePrefix,
+          schoolIdCode: finalAbbreviation,
           skuCode: combinedSchoolSku,
-          logoUrl: schoolLogoUrl.trim()
+          logoUrl: dynamicCloudLogoUrl
         });
-      } else {
-        if (!attributeName.trim() || !customSkuSuffix.trim()) return showNotification('error', 'Both name label and SKU suffix code are required.');
-        const data: any = activeSubTab === 'sizes' ? { label: attributeName.trim() } : { name: attributeName.trim() };
+
+      } else if (activeSubTab === 'types') {
+        if (!attributeName.trim()) return showNotification('error', 'Garment Type Name is required.');
         
-        data.skuCode = customSkuSuffix.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-        if (activeSubTab === 'locations') data.ruleProfile = locationProfile;
+        // 🧼 RULE: Force dynamic Multi-Word snake_case layout format
+        const normalisedGarmentName = attributeName.trim()
+          .replace(/\s+/g, '_')
+          .split('_')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join('_');
+
+        if (clothingTypes.some(t => t.name?.toLowerCase() === normalisedGarmentName.toLowerCase())) {
+          return showNotification('error', `Registration Refused: "${normalisedGarmentName}" already exists.`);
+        }
+
+        // ✂️ RULE: Strip underscores and clip machine suffix code strictly to a 4-letter max upper limit
+        const cleanSkuBase = normalisedGarmentName.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+        const finalEnforcedSku = cleanSkuBase.substring(0, 4);
+
+        await addDoc(collection(db, 'clothingTypes'), {
+          name: normalisedGarmentName,
+          skuCode: finalEnforcedSku,
+          sizeGroupTag: sizeGroupChoice
+        });
+
+      } else if (activeSubTab === 'sizes') {
+        if (!attributeName.trim()) return showNotification('error', 'Size Option Label is required.');
         
-        await addDoc(collection(db, colMap), data);
+        // 🧼 RULE: Force snake_case underscored labels for multi-word sizes (e.g. Adult_9-12)
+        const normalisedSizeLabel = attributeName.trim()
+          .replace(/\s+/g, '_')
+          .split('_')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join('_');
+
+        // ✂️ RULE: Strip all quote symbols and punctuation marks to make clean machine codes (e.g. 2022)
+        const cleanSizeSku = normalisedSizeLabel.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+
+        if (sizes.some(s => s.label?.toLowerCase() === normalisedSizeLabel.toLowerCase() && s.sizeGroupTag === sizeGroupChoice)) {
+          return showNotification('error', 'This size option is already registered under this sizing group folder.');
+        }
+
+        await addDoc(collection(db, 'sizes'), {
+          label: normalisedSizeLabel,
+          skuCode: cleanSizeSku,
+          sizeGroupTag: sizeGroupChoice
+        });
+
+      } else if (activeSubTab === 'colours') {
+        if (!attributeName.trim()) return showNotification('error', 'Colour Profile Name is required.');
+        const finalColourName = attributeName.trim().charAt(0).toUpperCase() + attributeName.trim().slice(1).toLowerCase();
+        
+        // ✂️ RULE: Force absolute 4-letter bold uppercase constraints (e.g. BLAK, BLUE)
+        const cleanColourSku = finalColourName.replace(/[^A-Z]/gi, '').toUpperCase().substring(0, 4);
+
+        if (colours.some(c => c.name?.toLowerCase() === finalColourName.toLowerCase() || c.skuCode === cleanColourSku)) {
+          return showNotification('error', 'This colour name description or 4-letter SKU token already exists.');
+        }
+
+        await addDoc(collection(db, 'colours'), {
+          name: finalColourName,
+          skuCode: cleanColourSku
+        });
+
+      } else if (activeSubTab === 'locations') {
+        if (!attributeName.trim()) return showNotification('error', 'Friendly Location Identifier Label is required.');
+        const baseLocationLabel = attributeName.trim();
+        let computedLocationSku = '';
+
+        if (locationProfile === 'Fixed Shelf') {
+          // 🧼 RULE: Fixed shelves bypass extensions and compile down strictly to 2 letters (e.g. PS)
+          computedLocationSku = baseLocationLabel.replace(/[^A-Z0-9]/gi, '').toUpperCase().substring(0, 2) || 'PS';
+        } else {
+          // 📦 RULE: VacPac Storage dynamically joins your zone code with a strict 2-digit padded package string
+          const cleanZone = vacPacZonePrefix.trim().toUpperCase().replace(/[^A-Z]/g, '').substring(0, 2) || 'VP';
+          const paddedNumber = String(vacPacNumber).padStart(2, '0'); // Pads 1 -> 01, 12 -> 12
+          computedLocationSku = `${cleanZone}${paddedNumber}`;
+        }
+
+        if (locations.some(l => l.skuCode === computedLocationSku)) {
+          return showNotification('error', `Location Slot Code "${computedLocationSku}" is already active in your system routing map.`);
+        }
+
+        await addDoc(collection(db, 'locations'), {
+          name: baseLocationLabel,
+          ruleProfile: locationProfile,
+          skuCode: computedLocationSku
+        });
       }
-      
-      showNotification('success', 'Component parameter generated successfully.');
-      setSchoolName(''); setSchoolIdCode(''); setSchoolLogoUrl(''); setAttributeName(''); setCustomSkuSuffix('');
-    } catch (err: any) { showNotification('error', err.message); }
+
+      showNotification('success', 'Component parameter generated and normalised successfully.');
+      // Flush fields
+      setCategoryName(''); setCategorySku(''); setClassLabelName(''); setClassValue('');
+      setSchoolName(''); setSchoolIdCode(''); setAttributeName(''); setCustomSkuSuffix('');
+      setSelectedCreationTypes([]); setSelectedCreationFile(null);
+    } catch (err: any) { 
+      showNotification('error', err.message); 
+    } finally {
+      setIsUploadingImage(false);
+    }
   };
+
   const handleExportCSV = () => {
     let headers = 'Name,SKU_Code\n';
     let rows = '';
@@ -292,6 +652,8 @@ export default function AdminPanel({
 
   const getActiveSubTabItems = (): { id: string; label: string; sku: string; profile?: string; logoUrl?: string; schoolType?: string; schoolIdCode?: string }[] => {
     switch (activeSubTab) {
+      case 'categories': return categories.map(c => ({ id: c.id, label: c.name || '', sku: c.skuCode || '', profile: `Sort Order: ${c.sortOrder || 1} ${c.requiresSchool ? '★ Requires School' : ''}` }));
+      case 'schoolClassifications': return schoolClassifications.map(c => ({ id: c.id, label: c.name || '', sku: c.skuCode || '', profile: `Weight Weight: ${c.sortOrder || 1}` }));
       case 'schools': return schools.map(s => ({ id: s.id, label: s.name, sku: s.skuCode, profile: `${s.schoolType} (${s.schoolIdCode})`, logoUrl: s.logoUrl, schoolType: s.schoolType, schoolIdCode: s.schoolIdCode }));
       case 'types': return clothingTypes.map(t => ({ id: t.id, label: t.name || '', sku: t.skuCode }));
       case 'sizes': return sizes.map(s => ({ id: s.id, label: s.label || '', sku: s.skuCode }));
@@ -304,18 +666,116 @@ export default function AdminPanel({
   const activeItems = getActiveSubTabItems();
   const handleDeleteMetadata = (collectionName: string, id: string, label: string) => { setMetadataToDelete({ collectionName, id, label }); };
   
+  // 🛡️ RECURSIVE DEPENDENCY PROTECTION SCANNER DEFINITION
+  const verifyAttributeIsSafeToDelete = async (collectionName: string, id: string, label: string): Promise<boolean> => {
+    try {
+      // 1. Recursive check: Safeguard mutable School Classification toggles (e.g., "J") before checking warehouse stock
+      if (collectionName === 'schoolClassifications') {
+        const targetClassification = schoolClassifications.find(c => c.id === id);
+        if (targetClassification && targetClassification.skuCode) {
+          const classificationKey = targetClassification.skuCode;
+          const assignedSchools = schools.filter(s => s.schoolType && s.schoolType.split('').includes(classificationKey));
+          if (assignedSchools.length > 0) {
+            showNotification('error', `Deletion Blocked: Classification "${classificationKey}" is actively assigned to ${assignedSchools.length} school profiles (e.g. ${assignedSchools[0].name}).`);
+            return false;
+          }
+        }
+      }
+
+      // 📡 Dynamic cross-reference query layer: Fetch live inventory tracking rows
+      const inventorySnapshot = await getDocs(collection(db, 'inventory'));
+      if (inventorySnapshot.empty) return true; // No warehouse stock exists; safe to clear parameter
+
+      const allActiveStockRows = inventorySnapshot.docs.map(d => ({ id: d.id, ...d.data() as any }));
+
+      // Match targets to their actual configuration identifiers
+      const targetRecord = 
+        collectionName === 'categories' ? categories.find(c => c.id === id) :
+        collectionName === 'clothingTypes' ? clothingTypes.find(t => t.id === id) :
+        collectionName === 'sizes' ? sizes.find(s => s.id === id) :
+        collectionName === 'colours' ? colours.find(c => c.id === id) :
+        collectionName === 'locations' ? locations.find(l => l.id === id) : null;
+
+      // Extract raw data keys for column mapping lookups
+      const targetName = targetRecord?.name || '';
+      const targetSku = targetRecord?.skuCode || '';
+      const targetSizeLabel = (targetRecord as any)?.label || '';
+
+      // 🚨 7-LAYER INTERACTIVE PROTECTION MATRIX FILTER LOGIC
+      for (const item of allActiveStockRows) {
+        // Condition 1: Safeguard Categories Column
+        if (collectionName === 'categories' && targetName && item.category === targetName) {
+          showNotification('error', `Deletion Blocked: "${targetName}" is attached to active stock items inside the warehouse floor.`);
+          return false;
+        }
+        // Condition 2: Safeguard Schools Registry Column
+        if (collectionName === 'schools') {
+          const schoolMatch = schools.find(s => s.id === id);
+          if (schoolMatch && item.school === schoolMatch.name) {
+            showNotification('error', `Deletion Blocked: "${schoolMatch.name}" holds registered apparel items inside your stock grids.`);
+            return false;
+          }
+        }
+        // Condition 3: Safeguard Garment Types Column (Triggers on Name or Suffix SKU match)
+        if (collectionName === 'clothingTypes' && ((targetName && item.garmentType === targetName) || (targetSku && item.skuCode?.includes(targetSku)))) {
+          showNotification('error', `Deletion Blocked: Garment parameter "${targetName || targetSku}" is currently assigned to clothes on the warehouse floor.`);
+          return false;
+        }
+        // Condition 4: Safeguard Sizes Option Column
+        if (collectionName === 'sizes' && targetSizeLabel && item.size === targetSizeLabel) {
+          showNotification('error', `Deletion Blocked: Size code "${targetSizeLabel}" holds active physical product quantities.`);
+          return false;
+        }
+        // Condition 5: Safeguard Colours Profile Column
+        if (collectionName === 'colours' && targetName && item.colour === targetName) {
+          showNotification('error', `Deletion Blocked: Colour string "${targetName}" is tied to live products.`);
+          return false;
+        }
+        // Condition 6 & 7: Safeguard Locations Mapping & Specific Vacuum Pack Numbers Columns
+        if (collectionName === 'locations' && targetSku && item.location === targetSku) {
+          const profileType = targetRecord?.ruleProfile || 'Storage Slot';
+          showNotification('error', `Deletion Blocked: Location ${profileType} "${targetSku}" is not empty. Relocate its quantities first.`);
+          return false;
+        }
+      }
+
+      return true; // No blocking dependencies found; safe to delete document row
+    } catch (e: any) {
+      console.error("Dependency check failed: ", e);
+      return false;
+    }
+  };
+
   const confirmDeleteMetadata = async () => {
     if (!metadataToDelete) return;
     setIsDeletingMetadata(true);
+    
     try {
+      // 🔓 Run the live 7-layer dependency scanner shield match
+      const isSafe = await verifyAttributeIsSafeToDelete(
+        metadataToDelete.collectionName, 
+        metadataToDelete.id, 
+        metadataToDelete.label
+      );
+
+      if (!isSafe) {
+        setMetadataToDelete(null);
+        return; // Scanner blocked deletion; system integrity preserved
+      }
+
+      // Execute deletion from Firestore configuration folders
       await deleteDoc(doc(db, metadataToDelete.collectionName, metadataToDelete.id));
-      showNotification('success', 'Mapping configuration deleted.'); setMetadataToDelete(null);
-    } catch (e: any) { showNotification('error', e.message); } finally { setIsDeletingMetadata(false); }
+      showNotification('success', 'Attribute mapping successfully deleted from parameters registry.');
+      setMetadataToDelete(null);
+    } catch (e: any) { 
+      showNotification('error', `Database Deletion Failure: ${e.message}`); 
+    } finally { 
+      setIsDeletingMetadata(false); 
+    }
   };
 
   return (
     <div id="admin-panel" className="bg-white rounded-3xl border border-slate-200 shadow-md overflow-hidden text-left">
-      {/* 📁 Administrative Main Tab Controls Selector buttons */}
       <div className="border-b border-slate-200 bg-slate-50/50 p-4 flex flex-wrap gap-3">
         <button type="button" onClick={() => setActiveMainTab('attributes')} className={`px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer transition ${activeMainTab === 'attributes' ? 'bg-brand-primary text-white border-brand-primary shadow-xs' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>🎛️ Stock Attributes</button>
         <button type="button" onClick={() => setActiveMainTab('staff')} className={`px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer flex items-center gap-1.5 transition ${activeMainTab === 'staff' ? 'bg-brand-primary text-white border-brand-primary shadow-xs' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}><Users className="w-3.5 h-3.5" /><span>Manage Staff</span></button>
@@ -326,78 +786,144 @@ export default function AdminPanel({
         <div className="divide-y divide-slate-100">
           <div className="bg-white px-4 py-2 flex flex-wrap gap-2">
             {tabsConfig.map((tab) => {
-              const Icon = tab.icon; const isActive = activeSubTab === tab.id;
+              const Icon = tab.icon;
+              const isActive = activeSubTab === tab.id;
               return (
-                <button key={tab.id} onClick={() => { setActiveSubTab(tab.id as SubTabType); cancelEdit(); }} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition ${isActive ? 'bg-brand-yellow text-slate-900 border border-brand-yellow' : 'text-slate-600 hover:bg-slate-100 border border-transparent'}`}><Icon className="w-3.5 h-3.5" /><span>{tab.label}</span><span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500">{tab.count}</span></button>
+                <button key={tab.id} onClick={() => { setActiveSubTab(tab.id as SubTabType); cancelEdit(); }} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition ${isActive ? 'bg-brand-yellow text-slate-900 border border-brand-yellow' : 'text-slate-600 hover:bg-slate-100 border border-transparent'}`}>
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{tab.label}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500">{tab.count}</span>
+                </button>
               );
             })}
           </div>
-          
+
           <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="bg-slate-50/60 border border-slate-200/60 p-5 rounded-2xl h-fit space-y-4">
               <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Configure Parameter</h4>
-              
               <form onSubmit={executeAddMetadata} className="space-y-3">
-                {activeSubTab === 'schools' ? (
+                {activeSubTab === 'categories' && (
                   <>
                     <div>
-                      <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase font-sans">School Full Name</label>
-                      <input type="text" value={schoolName} onChange={(e) => setSchoolName(e.target.value)} placeholder="e.g. All Hallows Primary" className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none" />
+                      <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">Category Name</label>
+                      <input type="text" value={categoryName} onChange={(e) => setCategoryName(e.target.value)} className="w-full p-2.5 border rounded-xl text-xs" />
                     </div>
                     <div>
-                      <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase font-sans">School Category Classification Type</label>
-                      <select value={schoolType} onChange={(e) => setSchoolType(e.target.value as any)} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none">
-                        <option value="JIN">JIN - Junior Infants Nursery</option>
-                        <option value="IN">IN - Infants and Nursery</option>
-                        <option value="M">M - Middle School</option>
-                        <option value="H">H - High School</option>
-                      </select>
+                      <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">SKU Code</label>
+                      <input type="text" value={categorySku} onChange={(e) => setCategorySku(e.target.value)} className="w-full p-2.5 border rounded-xl text-xs uppercase" />
                     </div>
                     <div>
-                      <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase font-sans">Machine Abbreviation ID Code</label>
-                      <input type="text" value={schoolIdCode} onChange={(e) => setSchoolIdCode(e.target.value)} placeholder="e.g. AHW" maxLength={6} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs uppercase font-mono tracking-wider focus:outline-none" />
+                      <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">Sort Order</label>
+                      <input type="number" value={categorySortOrder} onChange={(e) => setCategorySortOrder(Number(e.target.value))} className="w-full p-2.5 border rounded-xl text-xs" />
                     </div>
-                    <div>
-                      {/* 🖼️ BRAND NEW DYNAMIC SCHOOL LOGO CREST LINK FIELD */}
-                      <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase font-sans">School Crest Logo Image Link URL</label>
-                      <input type="text" value={schoolLogoUrl} onChange={(e) => setSchoolLogoUrl(e.target.value)} placeholder="https://example.com" className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none" />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase font-sans">Friendly Display Label Description</label>
-                      <input type="text" value={attributeName} onChange={(e) => setAttributeName(e.target.value)} placeholder={activeSubTab === 'sizes' ? "e.g. 7-8yrs" : activeSubTab === 'colours' ? "e.g. Black" : "Type display value..."} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none" />
-                    </div>
-                    <div>
-                      <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase font-sans">Machine SKU Suffix Identifier Code</label>
-                      <input type="text" value={customSkuSuffix} onChange={(e) => setCustomSkuSuffix(e.target.value)} placeholder={activeSubTab === 'sizes' ? "e.g. s0708" : activeSubTab === 'colours' ? "e.g. BLK" : "e.g. CARD"} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs uppercase font-mono tracking-wider focus:outline-none" />
-                    </div>
-                    {activeSubTab === 'locations' && (
-                      <div>
-                        <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase font-sans">Facility Operation Rules Profile</label>
-                        <select value={locationProfile} onChange={(e) => setLocationProfile(e.target.value as any)} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none">
-                          <option value="Pickers Shelf">Pickers Shelf Profile</option>
-                          <option value="VacPac Storage Area">VacPac Storage Profile</option>
-                        </select>
-                      </div>
-                    )}
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                      <input type="checkbox" checked={categoryRequiresSchool} onChange={(e) => setCategoryRequiresSchool(e.target.checked)} />
+                      Requires school selection
+                    </label>
                   </>
                 )}
+
+                {activeSubTab === 'schoolClassifications' && (
+                  <>
+                    <div>
+                      <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">Classification Label</label>
+                      <input type="text" value={classLabelName} onChange={(e) => setClassLabelName(e.target.value)} className="w-full p-2.5 border rounded-xl text-xs" />
+                    </div>
+                    <div>
+                      <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">Single Letter Key</label>
+                      <input type="text" maxLength={1} value={classValue} onChange={(e) => setClassValue(e.target.value)} className="w-full p-2.5 border rounded-xl text-xs uppercase" />
+                    </div>
+                    <div>
+                      <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">Sort Order</label>
+                      <input type="number" value={classSortOrder} onChange={(e) => setClassSortOrder(Number(e.target.value))} className="w-full p-2.5 border rounded-xl text-xs" />
+                    </div>
+                  </>
+                )}
+
+                {activeSubTab === 'schools' && (
+                  <>
+                    <div>
+                      <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">School Name</label>
+                      <input type="text" value={schoolName} onChange={(e) => setSchoolName(e.target.value)} className="w-full p-2.5 border rounded-xl text-xs" />
+                    </div>
+                    <div>
+                      <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">School Abbreviation</label>
+                      <input type="text" maxLength={4} value={schoolIdCode} onChange={(e) => setSchoolIdCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} className="w-full p-2.5 border rounded-xl text-xs uppercase" />
+                    </div>
+                    <div>
+                      <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">Classification Type</label>
+                      <div className="rounded-xl border bg-white p-2 space-y-2 max-h-48 overflow-auto">
+                        {schoolClassifications.map((cfg) => {
+                          const isChecked = selectedCreationTypes.includes(cfg.skuCode || '');
+                          return (
+                            <label key={cfg.id} className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                              <input type="checkbox" checked={isChecked} onChange={() => setSelectedCreationTypes((prev) => prev.includes(cfg.skuCode || '') ? prev.filter((k) => k !== cfg.skuCode) : [...prev, cfg.skuCode || ''])} />
+                              <span>{cfg.name} <span className="text-[10px] font-mono text-slate-400">({cfg.skuCode})</span></span>
+                            </label>
+                          );
+                        })}
+                        {schoolClassifications.length === 0 && <p className="text-[11px] text-slate-400">No classification options are currently available.</p>}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">School Crest</label>
+                      <input type="file" accept="image/*" onChange={(e) => setSelectedCreationFile(e.target.files ? e.target.files[0] : null)} className="w-full text-xs" />
+                    </div>
+                  </>
+                )}
+
+                {activeSubTab === 'types' && (
+                  <div>
+                    <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">Garment Type Name</label>
+                    <input type="text" value={attributeName} onChange={(e) => setAttributeName(e.target.value)} className="w-full p-2.5 border rounded-xl text-xs" />
+                  </div>
+                )}
+
+                {activeSubTab === 'sizes' && (
+                  <div>
+                    <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">Size Label</label>
+                    <input type="text" value={attributeName} onChange={(e) => setAttributeName(e.target.value)} className="w-full p-2.5 border rounded-xl text-xs" />
+                  </div>
+                )}
+
+                {activeSubTab === 'colours' && (
+                  <div>
+                    <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">Colour Name</label>
+                    <input type="text" value={attributeName} onChange={(e) => setAttributeName(e.target.value)} className="w-full p-2.5 border rounded-xl text-xs" />
+                  </div>
+                )}
+
+                {activeSubTab === 'locations' && (
+                  <>
+                    <div>
+                      <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">Location Name</label>
+                      <input type="text" value={attributeName} onChange={(e) => setAttributeName(e.target.value)} className="w-full p-2.5 border rounded-xl text-xs" />
+                    </div>
+                    <div>
+                      <label className="block mb-1 text-[10px] font-bold text-slate-500 uppercase">Profile</label>
+                      <select value={locationProfile} onChange={(e) => setLocationProfile(e.target.value as any)} className="w-full p-2.5 border rounded-xl text-xs">
+                        <option value="Fixed Shelf">Fixed Shelf</option>
+                        <option value="VacPac Storage">VacPac Storage</option>
+                      </select>
+                    </div>
+                  </>
+                )}
+
                 <button type="submit" className="w-full py-2.5 px-4 bg-brand-primary text-white font-bold rounded-xl text-xs shadow-xs cursor-pointer">Register Component Code</button>
               </form>
               <div className="border-t border-slate-200/60 pt-4">
                 <button type="button" onClick={handleExportCSV} className="w-full py-2 bg-white text-slate-700 font-bold rounded-xl border text-[11px] hover:bg-slate-50">Download Codes Template</button>
               </div>
             </div>
-            
+
             <div className="lg:col-span-2 space-y-4">
-              <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Active Configuration Parameters</h4>
+              <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">{activeSubTab === 'schools' ? 'Active Registered Schools' : 'Active Configuration Parameters'}</h4>
               <div className="overflow-hidden border border-slate-200 bg-white rounded-2xl shadow-xs">
                 <table className="w-full text-left text-xs text-slate-600">
                   <thead className="bg-slate-50 text-slate-700 font-bold">
                     <tr>
-                      <th className="px-4 py-3">Component Identifier Label</th>
+                      {activeSubTab === 'schools' && <th className="px-4 py-3 w-16">School Logo</th>}
+                      <th className="px-4 py-3">{activeSubTab === 'schools' ? 'School Identity Profile' : 'Component Identifier Label'}</th>
                       {activeSubTab === 'locations' && <th className="px-4 py-3">Rule Profile</th>}
                       <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
@@ -408,73 +934,53 @@ export default function AdminPanel({
                       const isSchoolTab = activeSubTab === 'schools';
                       return (
                         <tr key={item.id} className="hover:bg-slate-50/40 transition">
-                          <td className="px-4 py-3 font-medium text-slate-900">
+                          {isSchoolTab && (
+                            <td className="px-4 py-3 align-middle">
+                              {item.logoUrl ? <img src={item.logoUrl} alt="Crest" className="w-8 h-8 object-contain rounded-xl border border-slate-200 p-0.5 bg-slate-50" /> : <div className="w-8 h-8 rounded-xl bg-slate-100 border border-slate-200 border-dashed flex items-center justify-center text-[10px] font-bold text-slate-400">N/A</div>}
+                            </td>
+                          )}
+                          <td className="px-4 py-3 font-medium text-slate-900 align-middle">
                             {isEditing ? (
                               isSchoolTab ? (
                                 <div className="space-y-2 max-w-sm bg-slate-50 p-3 rounded-xl border border-slate-200 text-left">
                                   <div>
                                     <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">School Full Name</label>
-                                    <input type="text" value={editNameValue} onChange={(e) => setEditNameValue(e.target.value)} className="p-1.5 border border-slate-200 rounded-lg text-xs bg-white w-full focus:outline-none focus:ring-1 focus:ring-brand-primary" />
+                                    <input type="text" value={editNameValue} onChange={(e) => setEditNameValue(e.target.value)} className="p-1.5 border rounded-lg text-xs bg-white w-full" />
                                   </div>
                                   <div>
-                                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Classification Type</label>
-                                    <select value={editSchoolType} onChange={(e) => setEditSchoolType(e.target.value as any)} className="p-1.5 border border-slate-200 rounded-lg text-xs bg-white w-full focus:outline-none">
-                                      <option value="JIN">JIN - Junior Infants</option>
-                                      <option value="IN">IN - Infants Nursery</option>
-                                      <option value="M">M - Middle School</option>
-                                      <option value="H">H - High School</option>
-                                    </select>
+                                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Classification String</label>
+                                    <input type="text" value={selectedEditingTypes.join('')} onChange={(e) => setSelectedEditingTypes(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').split(''))} className="p-1.5 border rounded-lg text-xs bg-white w-full uppercase font-mono" />
                                   </div>
                                   <div>
-                                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Machine Abbreviation ID</label>
-                                    <input type="text" value={editSchoolIdCode} onChange={(e) => setEditSchoolIdCode(e.target.value)} className="p-1.5 border border-slate-200 rounded-lg text-xs bg-white w-full uppercase font-mono tracking-wider focus:outline-none" maxLength={6} />
-                                  </div>
-                                  <div>
-                                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Crest Logo URL Link</label>
-                                    <input type="text" value={editSchoolLogoUrl} onChange={(e) => setEditSchoolLogoUrl(e.target.value)} className="p-1.5 border border-slate-200 rounded-lg text-xs bg-white w-full focus:outline-none" placeholder="https://example.com" />
+                                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Abbreviation</label>
+                                    <input type="text" maxLength={4} value={editSchoolIdCode} onChange={(e) => setEditSchoolIdCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} className="p-1.5 border rounded-lg text-xs bg-white w-full uppercase font-mono" />
                                   </div>
                                 </div>
                               ) : (
                                 <div className="space-y-1.5 max-w-xs text-left">
                                   <label className="block text-[9px] font-bold text-slate-400 uppercase">Edit Display Label</label>
-                                  <input type="text" value={editNameValue} onChange={(e) => setEditNameValue(e.target.value)} className="p-1.5 border border-slate-200 rounded-lg text-xs bg-white w-full focus:outline-none focus:ring-1 focus:ring-brand-primary" />
-                            {(activeSubTab as string) !== 'schools' && (
-                                    <>
-                                      <label className="block text-[9px] font-bold text-slate-400 uppercase pt-1">Edit Suffix Code</label>
-                                      <input type="text" value={editSkuValue} onChange={(e) => setEditSkuValue(e.target.value)} placeholder="Edit Suffix Code" className="p-1.5 border border-slate-200 rounded-lg text-xs bg-white w-full uppercase font-mono tracking-wider focus:outline-none" />
-                                    </>
-                                  )}
+                                  <input type="text" value={editNameValue} onChange={(e) => setEditNameValue(e.target.value)} className="p-1.5 border rounded-lg text-xs bg-white w-full" />
+                                  <label className="block text-[9px] font-bold text-slate-400 uppercase">Edit Suffix Code</label>
+                                  <input type="text" value={editSkuValue} onChange={(e) => setEditSkuValue(e.target.value)} className="p-1.5 border rounded-lg text-xs bg-white w-full uppercase font-mono" />
                                 </div>
                               )
                             ) : (
-                              <div className="flex items-center gap-3 space-y-0.5 text-left">
-                                {isSchoolTab && item.logoUrl && (
-                                  <img src={item.logoUrl} alt="Crest" className="w-7 h-7 object-contain rounded-md border p-0.5 bg-slate-50 flex-shrink-0" onError={(e: any) => { e.target.style.display='none'; }} />
-                                )}
-                                <div>
-                                  <span className="block font-semibold text-slate-900">{item.label}</span>
-                                  <span className="inline-block text-[9px] font-mono tracking-wider text-slate-400 bg-slate-50 border border-slate-100 px-1 rounded mt-0.5">
-                                    SKU CODE: {item.sku}
-                                  </span>
-                                </div>
+                              <div className="space-y-0.5 text-left">
+                                <span className="block font-semibold text-slate-900">{item.label}</span>
+                                <span className="inline-block text-[9px] font-mono tracking-wider text-slate-400 bg-slate-50 border border-slate-100 px-1 rounded mt-0.5">SKU CODE: {item.sku}</span>
                               </div>
                             )}
                           </td>
                           {activeSubTab === 'locations' && (
-                            <td className="px-4 py-3 text-slate-500 text-left">
-                              {isEditing ? (
-                                <select value={editProfileValue} onChange={(e) => setEditProfileValue(e.target.value as any)} className="p-1.5 border border-slate-200 rounded-lg text-xs bg-white">
-                                  <option value="Pickers Shelf">Pickers Shelf</option>
-                                  <option value="VacPac Storage Area">VacPac Storage Area</option>
-                                </select>
-                              ) : item.profile}
+                            <td className="px-4 py-3 text-slate-500 text-left align-middle">
+                              {isEditing ? <select value={editProfileValue} onChange={(e) => setEditProfileValue(e.target.value as any)} className="p-1.5 border rounded-lg text-xs bg-white"><option value="Fixed Shelf">Fixed Shelf</option><option value="VacPac Storage">VacPac Storage</option></select> : item.profile}
                             </td>
                           )}
-                          <td className="px-4 py-3 text-right">
+                          <td className="px-4 py-3 text-right align-middle">
                             {isEditing ? (
                               <div className="flex justify-end gap-1">
-                                <button type="button" onClick={() => handleSaveEdit(activeSubTab === 'types' ? 'clothingTypes' : activeSubTab, item.id)} className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-lg cursor-pointer"><Check className="w-4 h-4" /></button>
-                                <button type="button" onClick={cancelEdit} className="p-1 text-slate-400 hover:bg-slate-100 rounded-lg cursor-pointer"><X className="w-4 h-4" /></button>
+                                <button type="button" disabled={isUploadingImage} onClick={() => handleSaveEdit(activeSubTab, item.id)} className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-lg cursor-pointer disabled:opacity-40"><Check className="w-4 h-4" /></button>
+                                <button type="button" disabled={isUploadingImage} onClick={cancelEdit} className="p-1 text-slate-400 hover:bg-slate-100 rounded-lg cursor-pointer disabled:opacity-40"><X className="w-4 h-4" /></button>
                               </div>
                             ) : (
                               <div className="flex justify-end gap-1">
@@ -486,7 +992,7 @@ export default function AdminPanel({
                         </tr>
                       );
                     })}
-                    {activeItems.length === 0 && <tr><td colSpan={3} className="text-center py-8 text-slate-400">No layout parameters configured yet.</td></tr>}
+                    {activeItems.length === 0 && <tr><td colSpan={activeSubTab === 'schools' ? 4 : 3} className="text-center py-8 text-slate-400">No layout parameters configured yet.</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -494,8 +1000,6 @@ export default function AdminPanel({
           </div>
         </div>
       )}
-
-
       {/* RENDER TAB PANEL 2: TEAM OPERATIONS AND MANAGE STAFF MEMBERS */}
       {activeMainTab === 'staff' && (
         <div className="p-6 space-y-6">
@@ -602,11 +1106,88 @@ export default function AdminPanel({
               </div>
             )}
           </div>
-
-          <div className="p-5 bg-rose-950/20 border border-rose-900/40 rounded-2xl space-y-3">
-            <div><span className="text-[10px] text-rose-400 uppercase tracking-widest font-bold">💥 Destructive Global Purge</span><p className="text-[11px] text-slate-400 mt-0.5">Wipes inventory structures inside Firestore collections completely back to 0 items maps.</p></div>
-            <button type="button" onClick={async () => { if(confirm("Purge global entries?")) { try { await clearInventoryToZero(); alert('Purged successfully.'); } catch(e: any) { alert(e.message); } } }} className="py-2 px-4 bg-rose-600 hover:bg-rose-700 text-white font-mono font-bold rounded-xl text-xs cursor-pointer shadow-md">FORCE RESET DATABASE</button>
+          
+          {/* 📡 PERMANENT DATABASE-ANCHORED SHORTCUT ACCELERATOR CONSOLE */}
+          <div className="p-5 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-sans">
+            <div className="space-y-0.5 text-left">
+              <span className="text-[10px] text-brand-yellow uppercase tracking-widest font-bold block font-mono">🔑 Automated Logo Bypass Access Gateway</span>
+              <p className="text-[11px] text-slate-400 leading-normal">Toggles developer bypass permissions directly inside your secure Firebase cloud server database. This setting survives all front-end cache purges and logouts.</p>
+            </div>
+            <div className="flex items-center gap-3 self-start sm:self-center">
+              <span className={`text-[10px] font-mono font-black uppercase tracking-wider ${localStorage.getItem('ue_cloud_bypass_ui') === 'true' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {localStorage.getItem('ue_cloud_bypass_ui') === 'true' ? 'BYPASS ACTIVE' : 'BYPASS LOCKED'}
+              </span>
+              <button 
+                type="button" 
+                onClick={async () => {
+                  try {
+                    setIsUploadingImage(true);
+                    const configRef = doc(db, 'system_config', 'settings');
+                    const configSnap = await getDoc(configRef);
+                    
+                    let nextState = true;
+                    if (configSnap.exists()) {
+                      nextState = !configSnap.data().dev_bypass_active;
+                      await updateDoc(configRef, { dev_bypass_active: nextState });
+                    } else {
+                      await setDoc(configRef, { dev_bypass_active: nextState });
+                    }
+                    
+                    localStorage.setItem('ue_cloud_bypass_ui', String(nextState));
+                    showNotification('success', `Cloud Configuration updated: Developer bypass shortcut is now ${nextState ? 'ENABLED' : 'DISABLED'}.`);
+                    
+                    // Quick layout flash to sync visual frames smoothly
+                    setTimeout(() => window.location.reload(), 100);
+                  } catch (err: any) {
+                    showNotification('error', `Database write failed: ${err.message}`);
+                  } finally {
+                    setIsUploadingImage(false);
+                  }
+                }}
+                className={`w-11 h-6 rounded-full p-0.5 transition cursor-pointer flex-shrink-0 ${
+                  localStorage.getItem('ue_cloud_bypass_ui') === 'true' 
+                    ? 'bg-emerald-600 flex justify-end' 
+                    : 'bg-slate-800 flex justify-start'
+                }`}
+              >
+                <div className="w-5 h-5 bg-white rounded-full shadow-md" />
+              </button>
+            </div>
           </div>
+
+
+
+          {/* ⚡ TWO-WAY ON-DEMAND DEVELOPER RE-SEEDING MANAGEMENT HUB */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-5 bg-slate-900 border border-slate-800 rounded-2xl space-y-3">
+              <div>
+                <span className="text-[10px] text-brand-yellow uppercase tracking-widest font-bold block">🌱 On-Demand Database Generation Suite</span>
+                <p className="text-[11px] text-slate-400 mt-0.5">Streams pristine mock datasets (schools, types, items tracking arrays) directly into your live Firestore database rows. These records are 100% editable and deletable.</p>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => { setPendingDevAction('seed'); setDevPasswordModalOpen(true); }} 
+                className="py-2 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-mono font-bold rounded-xl text-xs cursor-pointer shadow-md transition"
+              >
+                RUN LIVE DATABASE SEEDER
+              </button>
+            </div>
+
+            <div className="p-5 bg-rose-950/20 border border-rose-900/40 rounded-2xl space-y-3">
+              <div>
+                <span className="text-[10px] text-rose-400 uppercase tracking-widest font-bold block">💥 Destructive Global Purge</span>
+                <p className="text-[11px] text-slate-400 mt-0.5">Wipes inventory structures inside Firestore collections completely back to 0 items maps. Entries will never reappear until seeded on-demand.</p>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => { setPendingDevAction('purge'); setDevPasswordModalOpen(true); }} 
+                className="py-2 px-4 bg-rose-600 hover:bg-rose-700 text-white font-mono font-bold rounded-xl text-xs cursor-pointer shadow-md transition"
+              >
+                FORCE RESET DATABASE
+              </button>
+            </div>
+          </div>
+
         </div>
       )}
       {/* ⚠️ SAFETY DELETION CONFIRMATION OVERLAYS MODALS POPUPS */}
@@ -650,6 +1231,76 @@ export default function AdminPanel({
           </div>
         )}
       </AnimatePresence>
+            {/* 🛡️ SECURITY OVERLAY MODAL GATE: CONSOLE PASSWORD VERIFICATION FIREWALL */}
+      <AnimatePresence>
+        {devPasswordModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md">
+            <div className="absolute inset-0" onClick={() => { setDevPasswordModalOpen(false); setDevPasswordInput(''); }} />
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden relative z-10 text-left font-mono p-6 space-y-4 text-slate-200">
+              <div className="flex items-center gap-2 text-rose-400 border-b border-slate-800 pb-3">
+                <ShieldAlert className="w-5 h-5 animate-pulse" />
+                <h3 className="font-bold text-sm tracking-wide uppercase">Developer Access Validation</h3>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">Warning: You are attempting to run a destructive macro query override. Enter your project authorization credentials to authenticate this action.</p>
+              
+              <div className="space-y-1.5">
+                <label className="block text-[10px] uppercase font-bold text-slate-500 tracking-wider">System Password Code</label>
+                <input 
+                  type="password" 
+                  value={devPasswordInput} 
+                  onChange={(e) => setDevPasswordInput(e.target.value)} 
+                  placeholder="••••••••••••" 
+                  className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-black tracking-widest text-emerald-400 focus:outline-none focus:border-rose-500" 
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button 
+                  type="button" 
+                  onClick={() => { setDevPasswordModalOpen(false); setDevPasswordInput(''); }} 
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="button" 
+                  onClick={async () => {
+                    // Enforce structural project development password validation
+                    if (devPasswordInput === 'DevMode2026') {
+                      setDevPasswordModalOpen(false);
+                      setDevPasswordInput('');
+                      setIsUploadingImage(true);
+                      try {
+                        if (pendingDevAction === 'seed') {
+                          await seedSchools();
+                          showNotification('success', 'Smart stock data arrays successfully shuffled and injected!');
+                        } else if (pendingDevAction === 'purge') {
+                          await clearInventoryToZero();
+                          showNotification('success', 'Global warehouse tracking database successfully cleared back to 0.');
+                        }
+                      } catch (err: any) {
+                        showNotification('error', err.message);
+                      } finally {
+                        setIsUploadingImage(false);
+                        setPendingDevAction(null);
+                      }
+                    } else {
+                      showNotification('error', 'Authentication Failure: Invalid project developer credentials.');
+                      setDevPasswordModalOpen(false);
+                      setDevPasswordInput('');
+                      setPendingDevAction(null);
+                    }
+                  }} 
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-md"
+                >
+                  Unlock & Execute
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }

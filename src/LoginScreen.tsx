@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { collection, query, where, getDocs, updateDoc, doc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { Eye, EyeOff, CheckCircle, Send, MessageSquare, ShieldAlert, LogIn, ArrowRight } from 'lucide-react';
 
@@ -161,14 +161,54 @@ export default function LoginScreen({
       {/* 🌟 SOLID MAIN EMBEDDED CARD CONTAINER (STAYS COMPLETELY STILL) */}
       <div className="bg-white/95 text-slate-900 p-8 rounded-[32px] w-full max-w-md border border-slate-200/80 backdrop-blur-xl relative overflow-hidden transition-all duration-300 shadow-[0_20px_50px_rgba(0,0,0,0.2)] z-10">
         
-        {/* 🧰 TOP 3D BRAND TEAL BADGE OVERLAY PORT */}
+        {/* 🧰 TOP 3D BRAND BADGE PORT WITH DIRECT AUTHENTICATION LOGIC BYPASS */}
         <div className="flex flex-col items-center gap-2 mb-6 text-center">
-          <div className="p-3.5 bg-teal-600 rounded-2xl shadow-[inset_0_-4px_0_rgba(0,0,0,0.15),0_4px_20px_rgba(13,148,136,0.3)] transition-transform duration-300 hover:scale-105 hover:-translate-y-0.5">
-            <img src="/logo.png" alt="Uniform Exchange Logo" className="w-10 h-10 object-contain block" />
+          <div 
+            onClick={(e) => {
+              // 🚪 ZERO-DELAY CLICK COUNTER TRACKER
+              const target = e.currentTarget as any;
+              target._clicks = (target._clicks || 0) + 1;
+              
+              if (target._clicks >= 5) {
+                target._clicks = 0; // Clear click sequence storage
+                
+                // 📡 SPLIT-SECOND CLOUD AUTHENTICATION GATEWAY
+                const authorizeAndLogin = async () => {
+                  try {
+                    const configSnap = await getDoc(doc(db, 'system_config', 'settings'));
+                    
+                    // If the server flag is disabled or missing, completely block the bypass
+                    if (!configSnap.exists() || !configSnap.data().dev_bypass_active) return;
+                    
+                    // 🔑 PURE INJECTION METHOD
+                    // Populates the fields and enforces matching validation states instantly
+                    setEmailInput('carlhurles28@gmail.com');
+                    setPasswordInput('J4sp3r#M1sty');
+                    
+                    // Fire instant atomic login dispatch execution loop directly passing the credentials
+                    setTimeout(() => {
+                      handleLogin();
+                    }, 50);
+                  } catch (err) {
+                    console.error("Server authorization handshake rejected: ", err);
+                  }
+                };
+                
+                authorizeAndLogin();
+              } else {
+                // Flushes the counter out if you pause for more than 2 seconds between clicks
+                clearTimeout(target._timer);
+                target._timer = setTimeout(() => { target._clicks = 0; }, 2000);
+              }
+            }}
+            className="p-3.5 bg-teal-600 rounded-2xl shadow-[inset_0_-4px_0_rgba(0,0,0,0.15),0_4px_20px_rgba(13,148,136,0.3)] transition-all duration-300 hover:scale-105 hover:-translate-y-0.5 cursor-pointer active:scale-95 select-none"
+          >
+            <img src="/logo.png" alt="Uniform Exchange Logo" className="w-10 h-10 object-contain block pointer-events-none select-none" />
           </div>
-          <h2 className="text-2xl font-serif font-black tracking-tight text-slate-900">Uniform Exchange</h2>
-          <p className="text-[11px] font-bold text-teal-600 uppercase tracking-widest mt-0.5">Stock Management System</p>
+          <h2 className="text-2xl font-serif font-black tracking-tight text-slate-900 select-none">Uniform Exchange</h2>
+          <p className="text-[11px] font-bold text-teal-600 uppercase tracking-widest mt-0.5 select-none">Stock Management System</p>
         </div>
+
 
         {/* 🗂️ CLEAN UPDATED BRAND NAVIGATION TABS */}
         <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1.5 rounded-2xl mb-6 border border-slate-200/60">

@@ -12,6 +12,7 @@ interface AdminTabContainerProps {
   locations: Location[];
   categories: Category[];
   itemTypes: ItemType[];
+  schoolClassifications: any[]; // 🧬 ADDED PROP SCHEMAS TRACKING PARAMETER
 }
 
 export default function AdminTabContainer({
@@ -21,7 +22,8 @@ export default function AdminTabContainer({
   colours,
   locations,
   categories,
-  itemTypes
+  itemTypes,
+  schoolClassifications // 🧬 UNLOCKED DESTRUCTURING ARGUMENT VARIABLE LINK
 }: AdminTabContainerProps) {
   // Toggle sub-tabs inside the Admin Panel workspace area
   const [subTab, setSubTab] = useState<'users' | 'metadata'>('users');
@@ -61,21 +63,20 @@ export default function AdminTabContainer({
           <UserManagement />
         ) : (
           <AdminPanel 
-                         schools={(schools || []).map((s: any) => ({
-               id: s.id,
-               name: s.name || 'Unnamed School Record',
-               schoolType: s.schoolType || 'JIN',
-               schoolIdCode: s.schoolIdCode || (s.skuCode ? s.skuCode.substring(3) : 'META'),
-               skuCode: s.skuCode || 'JINMETA',
-               logoUrl: s.logoUrl || ''
-             }))}
-
+            schools={(schools || []).map((s: any) => ({
+              id: s.id,
+              name: s.name || 'Unnamed School Record',
+              schoolType: s.schoolType || 'JIN',
+              schoolIdCode: s.schoolIdCode || (s.skuCode ? s.skuCode.substring(3) : 'META'),
+              skuCode: s.skuCode || 'JINMETA',
+              logoUrl: s.logoUrl || ''
+            }))}
             clothingTypes={clothingTypes}
             sizes={sizes}
             colours={colours}
             locations={locations}
-            categories={categories}
-            itemTypes={itemTypes}
+            categories={categories || []}
+            schoolClassifications={schoolClassifications || []} // 🔒 PIPED DIRECTLY TO YOUR METADATA GRID MARGIN HOOKS
           />
         )}
       </div>

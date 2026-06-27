@@ -13,6 +13,7 @@ export function useFirestoreData() {
   const [colours, setColours] = useState<Colour[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [schoolClassifications, setSchoolClassifications] = useState<any[]>([]);
   const [itemTypes, setItemTypes] = useState<ItemType[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
 
@@ -55,6 +56,11 @@ export function useFirestoreData() {
       setCategories(items.sort((a, b) => a.name.localeCompare(b.name)));
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'categories'));
 
+    const unsubSchoolClassifications = onSnapshot(collection(db, 'schoolClassifications'), (snap) => {
+      const items: any[] = []; snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
+      setSchoolClassifications(items.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)));
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'schoolClassifications'));
+
     const unsubItemTypes = onSnapshot(collection(db, 'itemTypes'), (snap) => {
       const items: ItemType[] = []; snap.forEach((d) => items.push({ id: d.id, ...d.data() } as ItemType));
       setItemTypes(items.sort((a, b) => a.name.localeCompare(b.name)));
@@ -67,9 +73,9 @@ export function useFirestoreData() {
 
     return () => {
       unsubSchools(); unsubTypes(); unsubSizes(); unsubColours();
-      unsubLocations(); unsubCategories(); unsubItemTypes(); unsubInventory();
+      unsubLocations(); unsubCategories(); unsubSchoolClassifications(); unsubItemTypes(); unsubInventory();
     };
   }, []);
 
-  return { schools, clothingTypes, sizes, colours, locations, categories, itemTypes, inventory, loading, seeding };
+  return { schools, clothingTypes, sizes, colours, locations, categories, schoolClassifications, itemTypes, inventory, loading, seeding };
 }

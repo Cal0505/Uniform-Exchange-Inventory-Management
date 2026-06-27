@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app';
+import { getStorage } from 'firebase/storage';
 import { getFirestore, writeBatch, doc, getDocFromServer } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -16,6 +17,8 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore with specific database ID from config
 export const db = getFirestore(app, firebaseConfig.databaseId);
+
+export const storage = getStorage(app);
 
 // Test Connection on load
 async function testConnection() {
