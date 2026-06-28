@@ -1,38 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Master Gate: Default deny all unmapped paths
     match /{document=**} {
-      allow read, write: if false;
-    }
-
-    // Schools Collection
-    match /schools/{schoolId} {
-      allow read, write: if true;
-    }
-
-    // Clothing Types Collection
-    match /clothingTypes/{typeId} {
-      allow read, write: if true;
-    }
-
-    // Sizes Collection
-    match /sizes/{sizeId} {
-      allow read, write: if true;
-    }
-
-    // Colours Collection
-    match /colours/{colourId} {
-      allow read, write: if true;
-    }
-
-    // Locations Collection
-    match /locations/{locationId} {
-      allow read, write: if true;
-    }
-
-    // Inventory Collection
-    match /inventory/{itemId} {
       allow read, write: if true;
     }
   }

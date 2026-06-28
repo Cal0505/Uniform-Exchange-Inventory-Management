@@ -8,13 +8,15 @@ interface LoginScreenProps {
   passwordInput: string; setPasswordInput: (v: string) => void;
   loginError: string; showPassword: boolean; setShowPassword: (v: boolean) => void;
   handleLogin: () => void;
+  bypassEnabled: boolean;
+  refreshBypassState?: () => Promise<boolean>;
 }
 
 type TabType = 'login' | 'register' | 'support';
 
 export default function LoginScreen({
   emailInput, setEmailInput, passwordInput, setPasswordInput, loginError,
-  showPassword, setShowPassword, handleLogin
+  showPassword, setShowPassword, handleLogin, bypassEnabled, refreshBypassState
 }: LoginScreenProps) {
   const [activeTab, setActiveTab] = useState<TabType>('login');
   
@@ -175,10 +177,10 @@ export default function LoginScreen({
                 // 📡 SPLIT-SECOND CLOUD AUTHENTICATION GATEWAY
                 const authorizeAndLogin = async () => {
                   try {
-                    const configSnap = await getDoc(doc(db, 'system_config', 'settings'));
-                    
+                    const latestState = refreshBypassState ? await refreshBypassState() : bypassEnabled;
+
                     // If the server flag is disabled or missing, completely block the bypass
-                    if (!configSnap.exists() || !configSnap.data().dev_bypass_active) return;
+                    if (!latestState) return;
                     
                     // 🔑 PURE INJECTION METHOD
                     // Populates the fields and enforces matching validation states instantly

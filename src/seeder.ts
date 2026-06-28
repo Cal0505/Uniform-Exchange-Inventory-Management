@@ -292,7 +292,9 @@ export async function seedDemoInventory(
 
 // Purges ALL inventory items from the database
 export async function clearInventoryCollection() {
-  const qSnap = await getDocs(collection(db, 'inventory'));
+// 🎯 ALIGN THIS WORD EXACTLY TO YOUR REAL CLOUD FOLDER NAME:
+const qSnap = await getDocs(collection(db, 'inventory'));
+
   if (qSnap.empty) return;
 
   let batch = writeBatch(db);

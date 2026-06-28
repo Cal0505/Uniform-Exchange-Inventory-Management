@@ -1,18 +1,22 @@
-import React, { useState } from 'react';
+import React from 'react';
 import AdminPanel from './components/AdminPanel';
-import UserManagement from './UserManagement'; // Import our new user directory table
-import { School, ClothingType, Size, Colour, Location, Category, ItemType } from './types';
-import { Users, Sliders } from 'lucide-react';
+import Management from './components/Management';
+import UserManagement from './UserManagement'; 
+import DevToolsDashboard from './components/DevToolsDashboard';
+import { School, ClothingType, Size, Colour, Location as WarehouseLocation, Category, ItemType } from './types';
 
-interface AdminTabContainerProps {
+// 📡 THE ABSOLUTE TRUTH MASTER PROTOCOL INTERFACE DEFINITION
+export interface AdminTabContainerProps {
   schools: School[];
   clothingTypes: ClothingType[];
   sizes: Size[];
   colours: Colour[];
-  locations: Location[];
+  locations: WarehouseLocation[]; 
   categories: Category[];
   itemTypes: ItemType[];
-  schoolClassifications: any[]; // 🧬 ADDED PROP SCHEMAS TRACKING PARAMETER
+  schoolTypes: any[]; 
+  userRole: string;
+  forcedSubTabOverride?: string;
 }
 
 export default function AdminTabContainer({
@@ -22,64 +26,56 @@ export default function AdminTabContainer({
   colours,
   locations,
   categories,
-  itemTypes,
-  schoolClassifications // 🧬 UNLOCKED DESTRUCTURING ARGUMENT VARIABLE LINK
+  schoolTypes,
+  userRole,
+  forcedSubTabOverride
 }: AdminTabContainerProps) {
-  // Toggle sub-tabs inside the Admin Panel workspace area
-  const [subTab, setSubTab] = useState<'users' | 'metadata'>('users');
 
+  const activeView = forcedSubTabOverride || 'staff';
+
+  const mappedSchools = (schools || []).map((s: any) => ({
+    id: s.id,
+    name: s.name || 'Unnamed School Record',
+    schoolType: s.schoolType || 'JIN',
+    schoolIdCode: s.schoolIdCode || (s.skuCode ? s.skuCode.substring(3) : 'META'),
+    skuCode: s.skuCode || 'JINMETA',
+    logoUrl: s.logoUrl || ''
+  }));
   return (
-    <div className="space-y-6">
-      {/* INTERNAL SUB-NAVIGATION BUTTONS */}
-      <div className="flex border-b border-slate-200 gap-6">
-        <button
-          onClick={() => setSubTab('users')}
-          className={`pb-2 text-sm font-bold border-b-2 transition-all flex items-center gap-1.5 ${
-            subTab === 'users'
-              ? 'border-blue-600 text-blue-600 font-bold'
-              : 'border-transparent text-slate-500 hover:text-slate-900 font-semibold'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          <span>Manage Staff Access</span>
-        </button>
+    <div className="w-full animate-fadeIn">
+      {/* 🧭 ROUTER ENGINE BLOCK */}
+      {activeView === 'staff' && (
+        <div className="w-full">
+          <UserManagement userRole={userRole} />
+        </div>
+      )}
 
-        <button
-          onClick={() => setSubTab('metadata')}
-          className={`pb-2 text-sm font-bold border-b-2 transition-all flex items-center gap-1.5 ${
-            subTab === 'metadata'
-              ? 'border-blue-600 text-blue-600 font-bold'
-              : 'border-transparent text-slate-500 hover:text-slate-900 font-semibold'
-          }`}
-        >
-          <Sliders className="w-4 h-4" />
-          <span>Stock Configuration Attributes</span>
-        </button>
-      </div>
+      {activeView === 'dev' && (userRole === 'Dev' || userRole === 'Master_Dev') ? (
+        <div className="w-full">
+          <DevToolsDashboard userRole={userRole} />
+        </div>
+      ) : activeView === 'dev' ? (
+        <div className="w-full bg-white border border-rose-100 p-8 rounded-3xl text-center text-slate-400 select-none max-w-xl animate-fadeIn">
+          <div className="w-10 h-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center mx-auto mb-3">⚠️</div>
+          <span className="block text-xs font-mono font-black uppercase tracking-wider text-slate-800">Clearance Access Denied</span>
+          <p className="text-[11px] font-medium text-slate-400 mt-1 leading-relaxed">This terminal is restricted. You do not possess structural credentials to view root developer assets.</p>
+        </div>
+      ) : null}
 
-      {/* CONDITIONAL RENDER PANELS */}
-      <div className="pt-2">
-        {subTab === 'users' ? (
-          <UserManagement />
-        ) : (
-          <AdminPanel 
-            schools={(schools || []).map((s: any) => ({
-              id: s.id,
-              name: s.name || 'Unnamed School Record',
-              schoolType: s.schoolType || 'JIN',
-              schoolIdCode: s.schoolIdCode || (s.skuCode ? s.skuCode.substring(3) : 'META'),
-              skuCode: s.skuCode || 'JINMETA',
-              logoUrl: s.logoUrl || ''
-            }))}
-            clothingTypes={clothingTypes}
-            sizes={sizes}
-            colours={colours}
-            locations={locations}
-            categories={categories || []}
-            schoolClassifications={schoolClassifications || []} // 🔒 PIPED DIRECTLY TO YOUR METADATA GRID MARGIN HOOKS
-          />
-        )}
-      </div>
+
+      {['categories', 'schoolTypes', 'schools', 'types', 'sizes', 'colours', 'locations'].includes(activeView) && (
+        <Management 
+          schools={mappedSchools}
+          clothingTypes={clothingTypes as any}
+          sizes={sizes as any}
+          colours={colours as any}
+          locations={locations as any}
+          categories={categories || []}
+          schoolTypes={schoolTypes || []}
+          userRole={userRole}
+          forcedSubTabOverride={activeView}
+        />
+      )}
     </div>
   );
 }

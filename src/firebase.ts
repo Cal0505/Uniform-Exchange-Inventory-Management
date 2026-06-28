@@ -1,36 +1,24 @@
 import { initializeApp } from 'firebase/app';
 import { getStorage } from 'firebase/storage';
-import { getFirestore, writeBatch, doc, getDocFromServer } from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
 
+// 🔌 YOUR FRESH APPMOBILE CLOUD FIREBASE SERVERS CHANNELS KEYS
 const firebaseConfig = {
-  projectId: "gen-lang-client-0192897828",
-  appId: "1:597182250144:web:890cbd4f787c5b8c015dc5",
-  apiKey: "AIzaSyDXSVT4hsM-RbFvYCGS03FNmZ7txVwqxfg",
-  authDomain: "gen-lang-client-0192897828.firebaseapp.com",
-  databaseId: "ai-studio-0d62531f-793c-4854-8959-f388e885c8a7",
-  storageBucket: "gen-lang-client-0192897828.firebasestorage.app",
-  messagingSenderId: "597182250144"
+  apiKey: "AIzaSyDwoXVlyu0DkNeEP9VK-E0Ul105vHMXydU",
+  authDomain: "://firebaseapp.com",
+  projectId: "uniformex-inventory-app",
+  storageBucket: "uniformex-inventory-app.firebasestorage.app",
+  messagingSenderId: "962236027572",
+  appId: "1:962236027572:web:6fe1c280f1cd4acb6a3de1"
 };
 
-// Initialize Firebase
+// Initialize Firebase App Instance
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with specific database ID from config
-export const db = getFirestore(app, firebaseConfig.databaseId);
+// Direct connector to your fresh database
+export const db = getFirestore(app);
 
 export const storage = getStorage(app);
-
-// Test Connection on load
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration. Client is offline.");
-    }
-  }
-}
-testConnection();
 
 // Structured Error Handling for Firestore Security Rules / Permissions
 export enum OperationType {
@@ -52,7 +40,7 @@ export interface FirestoreErrorInfo {
     emailVerified?: boolean | null;
     isAnonymous?: boolean | null;
     tenantId?: string | null;
-    providerInfo?: {
+    providerInfo: {
       providerId?: string | null;
       email?: string | null;
     }[];
