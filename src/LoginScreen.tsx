@@ -158,7 +158,7 @@ export default function LoginScreen({
     <div className="min-h-screen bg-[#060a12] flex items-center justify-center p-6 font-sans relative overflow-hidden">
       
       {/* 🚀 FIXED BACKING BOX GENERATING THE RECTANGULAR PULSATING GLOW */}
-      <div className="absolute w-full max-w-md h-[550px] bg-orange-600/25 rounded-[32px] blur-[80px] pointer-events-none shadow-[0_0_120px_rgba(234,88,12,0.4)] animate-pulse duration-[5000ms]" />
+      <div className="absolute w-full max-w-md h-[550px] bg-orange-600/100 rounded-[32px] blur-[80px] pointer-events-none shadow-[0_0_120px_rgba(234,88,12,0.4)] animate-pulse duration-[5000ms]" />
 
       {/* 🌟 SOLID MAIN EMBEDDED CARD CONTAINER (STAYS COMPLETELY STILL) */}
       <div className="bg-white/95 text-slate-900 p-8 rounded-[32px] w-full max-w-md border border-slate-200/80 backdrop-blur-xl relative overflow-hidden transition-all duration-300 shadow-[0_20px_50px_rgba(0,0,0,0.2)] z-10">
