@@ -22,18 +22,82 @@ export const runDatabaseSeeder = async (): Promise<void> => {
   ];
 
   const garmentTypes = [
-    "V-Neck Knitted Jumper", "Crewneck Fleece Sweatshirt", "Embroidered Polo Shirt",
-    "Tailored Slim Trousers", "Pleated School Skirt", "Heavy Duty Waterproof Parka",
-    "Formal Button-Up Shirt", "Athletic Cotton PE Shorts", "Padded Winter Gilet",
+    "V-Neck Knitted Jumper",
+    "Crewneck Fleece Sweatshirt",
+    "Embroidered Polo Shirt",
+    "Tailored Slim Trousers",
+    "Pleated School Skirt",
+    "Heavy Duty Waterproof Parka",
+    "Formal Button-Up Shirt",
+    "Athletic Cotton PE Shorts",
+    "Padded Winter Gilet",
     "Premium Leather School Shoes"
   ];
 
-  const colours = ["Navy Blue", "Bottle Green", "Burgundy Maroon", "Charcoal Grey", "Jet Black", "Classic Amber"];
-  const shoeSizes = ["Kids Size 1", "Kids Size 2", "Kids Size 3", "Ladies Size 4", "Ladies Size 5", "Ladies Size 6", "Ladies Size 7", "Ladies Size 8", "Ladies Size 9", "Ladies Size 10", "Ladies Size 11", "Ladies Size 12"];
-  const kidsSizes = ["1-2 Yrs", "3-4 Yrs", "5-6 Yrs", "7-8 Yrs", "9-10 Yrs", "11-12 Yrs", "13-14 Yrs", "15-16 Yrs", "16-17 Yrs"];
-  const waistSizes = ["Waist 24\"", "Waist 26\"", "Waist 28\"", "Waist 30\"", "Waist 32\"", "Waist 34\"", "Waist 36\""];
-  const chestSizes = ["Chest 28\"", "Chest 30\"", "Chest 32\"", "Chest 34\"", "Chest 36\"", "Chest 38\"", "Chest 40\""];
-  const ladiesSizes = ["Ladies Size 6", "Ladies Size 8", "Ladies Size 10", "Ladies Size 12", "Ladies Size 14", "Ladies Size 16"];
+  const colours = [
+    "Navy Blue",
+    "Bottle Green",
+    "Burgundy Maroon",
+    "Charcoal Grey",
+    "Jet Black",
+    "Classic Amber"
+  ];
+
+  const shoeSizes = [
+    "Kids Size 1",
+    "Kids Size 2",
+    "Kids Size 3",
+    "Ladies Size 4",
+    "Ladies Size 5",
+    "Ladies Size 6",
+    "Ladies Size 7",
+    "Ladies Size 8",
+    "Ladies Size 9",
+    "Ladies Size 10",
+    "Ladies Size 11",
+    "Ladies Size 12"
+  ];
+
+  const kidsSizes = [
+    "1-2 Yrs",
+    "3-4 Yrs",
+    "5-6 Yrs",
+    "7-8 Yrs",
+    "9-10 Yrs",
+    "11-12 Yrs",
+    "13-14 Yrs",
+    "15-16 Yrs",
+    "16-17 Yrs"
+  ];
+
+  const waistSizes = [
+    "Waist 24\"",
+    "Waist 26\"",
+    "Waist 28\"",
+    "Waist 30\"",
+    "Waist 32\"",
+    "Waist 34\"",
+    "Waist 36\""
+  ];
+
+  const chestSizes = [
+    "Chest 28\"",
+    "Chest 30\"",
+    "Chest 32\"",
+    "Chest 34\"",
+    "Chest 36\"",
+    "Chest 38\"",
+    "Chest 40\""
+  ];
+
+  const ladiesSizes = [
+    "Ladies Size 6",
+    "Ladies Size 8",
+    "Ladies Size 10",
+    "Ladies Size 12",
+    "Ladies Size 14",
+    "Ladies Size 16"
+  ];
 
   const generateLocations = (): string[] => {
     const locs: string[] = ["Pickers Shelf Front", "VacPack Sealed Box 1", "VacPack Sealed Box 2", "Overstock Bay 4"];
