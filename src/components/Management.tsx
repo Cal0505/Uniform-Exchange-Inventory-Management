@@ -77,6 +77,7 @@ export default function ManagementDashboard({
   const [newLocationName, setNewLocationName] = useState<string>('');
   const [newLocationLabel, setNewLocationLabel] = useState<string>('');
   const [newLocationSkuCode, setNewLocationSkuCode] = useState<string>('');
+  
   // ==========================================
   // 🔒 PART 2:A SECURE UNIVERSAL DEPENDENCY CHECK
   // ==========================================
