@@ -1,230 +1,327 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { Trash2, Plus, AlertTriangle, Check, Loader2 } from 'lucide-react';
-
-interface AdvancedSchool {
-  id: string; name: string; schoolType: string; schoolIdCode: string; skuCode: string;
-}
-
-interface AdvancedAttribute {
-  id: string; name?: string; label?: string; skuCode: string; ruleProfile?: string; sizeGroupTag?: string; sortOrder?: number;
-}
+import { collection, addDoc, doc, writeBatch, query, where, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
+import { Layers, Check, Loader2, Edit2, ShieldAlert, School, Shirt, Maximize2, Palette, MapPin, Clock, PlusCircle, Trash2 } from 'lucide-react';
 
 interface ManagementProps {
-  schools: AdvancedSchool[];
-  clothingTypes: AdvancedAttribute[];
-  sizes: AdvancedAttribute[];
-  colours: AdvancedAttribute[];
-  locations: AdvancedAttribute[];
-  categories: any[];
-  schoolTypes: any[];
-  userRole: string;
-  forcedSubTabOverride?: string;
+  schools: any[]; clothingTypes: any[]; sizes: any[]; colours: any[]; locations: any[]; categories: any[]; schoolTypes: any[]; userRole: string; forcedSubTabOverride?: 'categories' | 'schoolTypes' | 'schools' | 'types' | 'sizes' | 'colours' | 'locations';
 }
 
-export default function Management({
-  schools,
-  clothingTypes,
-  sizes,
-  colours,
-  locations,
-  categories,
-  schoolTypes,
-  userRole,
-  forcedSubTabOverride
-}: ManagementProps) {
-  // Local input tracking states for the configuration forms
-  const [formNameInput, setFormNameInput] = useState('');
-  const [formSkuInput, setFormSkuInput] = useState('');
-  const [formSizeGroupChoice, setFormSizeGroupChoice] = useState('YOUTH_AGE');
-  const [formSchoolTypeChoice, setFormSchoolTypeChoice] = useState('JIN');
-  const [formSchoolIdInput, setFormSchoolIdInput] = useState('');
-  
+export default function Management({ schools, clothingTypes, sizes, colours, locations, categories, schoolTypes, userRole, forcedSubTabOverride }: ManagementProps) {
+  const activeSubTab = forcedSubTabOverride || 'categories';
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState<{ table: string; id: string; name: string } | null>(null);
 
-  // 📡 DYNAMIC MANAGEMENT TAB ROUTER TETHERED TO NAVBAR CLICKS
-  const currentManagementView = forcedSubTabOverride || 'categories';
+  // 📂 GLOBAL EDIT AND ACTIVATION SYSTEM HOOKS
+  const [editingId, setEditingId] = useState<string | null>(null);
 
-  // 📡 DATA SHEET COMPILER INDEX: Maps out rows live based on active sidebar parameters selections
-  const getActiveViewItemsAndLabels = () => {
-    switch (currentManagementView) {
-      case 'categories': 
-        return { items: categories.map(c => ({ id: c.id, name: c.name || '', code: c.skuCode || '', meta: '' })), title: 'Master Categories', label: 'Category Name', codeLabel: 'SKU Prefix (e.g. L, P, N)' };
-      case 'schoolTypes': 
-        return { items: schoolTypes.map(st => ({ id: st.id, name: st.name || '', code: st.skuCode || '', meta: '' })), title: 'School Classification Types', label: 'Classification Tier (e.g. Junior, Senior)', codeLabel: 'Type Code (e.g. JIN, SEN)' };
-      case 'schools': 
-        return { items: schools.map(s => ({ id: s.id, name: s.name, code: `${s.schoolType}-${s.schoolIdCode}`, meta: '' })), title: 'School Registry Profiles', label: 'School Full Name', codeLabel: 'Abbreviation Code (e.g. AHW, BKW)' };
-      case 'types': 
-        return { items: clothingTypes.map(t => ({ id: t.id, name: t.name || '', code: t.skuCode || '', meta: t.sizeGroupTag || '' })), title: 'Garment Types Blueprint Matrix', label: 'Garment Description Name (e.g. Jumper)', codeLabel: 'SKU Center Fragment (e.g. JUMP)' };
-      case 'sizes': 
-        return { items: sizes.map(s => ({ id: s.id, name: s.label || s.name || '', code: s.skuCode || '', meta: s.sizeGroupTag || '' })), title: 'Sizes Options Matrix', label: 'Display Size Suffix (e.g. 3-4yrs, Medium)', codeLabel: 'Database Code (e.g. 0304, MEDI)' };
-      case 'colours': 
-        return { items: colours.map(c => ({ id: c.id, name: c.name || '', code: c.skuCode || '', meta: '' })), title: 'Fabric Colours Profiles', label: 'Colour Shade Name (e.g. Burgundy)', codeLabel: 'Colour Code (e.g. BUR, RED)' };
-      case 'locations': 
-        return { items: locations.map(l => ({ id: l.id, name: l.name || '', code: l.skuCode || '', meta: '' })), title: 'Warehouse Storage Locations', label: 'Physical Zone Name (e.g. Pickers Shelf)', codeLabel: 'Zone Prefix (e.g. PS, UO)' };
-      default: 
-        return { items: [], title: 'Registry', label: 'Name', codeLabel: 'Code' };
-    }
+  // 📂 FORMS INSERTION STATES
+  const [newCatName, setNewCatName] = useState('');
+  const [catHasSchools, setCatHasSchools] = useState(false);
+  const [skuPrefix, setSkuPrefix] = useState('');
+  const [packagingType, setPackagingType] = useState<'Single' | 'VacPac' | 'Both'>('Single');
+
+  const [editCatName, setEditCatName] = useState('');
+  const [editCatHasSchools, setEditCatHasSchools] = useState(false);
+  const [editSkuPrefix, setEditSkuPrefix] = useState('');
+  const [editPackagingType, setEditPackagingType] = useState<'Single' | 'VacPac' | 'Both'>('Single');
+
+  const handlePrefixTextNormalization = (textInput: string, targetSetter: (v: string) => void) => {
+    const uppercaseSingleLetter = textInput.trim().toUpperCase().replace(/[^A-Z]/g, '');
+    targetSetter(uppercaseSingleLetter.substring(0, 1));
   };
 
-
-  const activeView = getActiveViewItemsAndLabels();
-
-  // Clear input fields when swapping configuration parameters sheets
-  useEffect(() => {
-    setFormNameInput(''); setFormSkuInput(''); setFormSizeGroupChoice('YOUTH_AGE'); setFormSchoolTypeChoice('JIN'); setFormSchoolIdInput('');
-  }, [currentManagementView]);
-  const handleRegisterNewParameter = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formNameInput.trim()) {
-      alert("Validation Error: Configuration parameter label name cannot be empty.");
-      return;
-    }
-
+  const handleUpdateMasterCategory = async (catDocId: string, oldCatId: string, oldCatName: string) => {
+    if (!editCatName.trim() || !editSkuPrefix) { alert("Missing parameters."); return; }
     try {
       setIsSubmitting(true);
-      const cleanName = formNameInput.trim();
-      const cleanSku = formSkuInput.trim().toUpperCase();
+      const inventoryQuery = query(collection(db, 'inventory'), where('categoryId', '==', oldCatId));
+      const inventorySnapshot = await getDocs(inventoryQuery);
+      const linkedItemsCount = inventorySnapshot.docs.length;
 
-      // 🛰️ DYNAMIC DATABASE COLLECTION router target selector
-      if (currentManagementView === 'schools') {
-        if (!formSchoolIdInput.trim()) return alert("Validation Error: School abbreviation code required.");
-        await addDoc(collection(db, 'schools'), {
-          name: cleanName,
-          schoolType: formSchoolTypeChoice,
-          schoolIdCode: formSchoolIdInput.trim().toUpperCase(),
-          skuCode: `${formSchoolTypeChoice}-${formSchoolIdInput.trim().toUpperCase()}`.toUpperCase()
-        });
-      } else {
-        const targetedTable = currentManagementView === 'types' ? 'clothingTypes' : currentManagementView;
-        const payloadData: any = { skuCode: cleanSku };
-        
-        if (currentManagementView === 'sizes') payloadData.label = cleanName; else payloadData.name = cleanName;
-        
-        // 📏 MATRIX RULE ASSIGNMENTS: Binds jumpers and shoes to their exact size groupings on setup save
-        if (currentManagementView === 'types' || currentManagementView === 'sizes') {
-          payloadData.sizeGroupTag = formSizeGroupChoice;
-        }
-
-        await addDoc(collection(db, targetedTable), payloadData);
+      if (linkedItemsCount > 0) {
+        const passkey = prompt(`🔒 CASCADE UPDATE WARNING:\nThere are ${linkedItemsCount} items using "${oldCatName}". Enter Passkey to confirm sync:`);
+        if (passkey !== 'J4sp3r#M1sty') { alert("Aborted."); setIsSubmitting(false); return; }
       }
 
-      setFormNameInput(''); setFormSkuInput(''); setFormSchoolIdInput('');
-    } catch (err) { console.error("Management registry write failure:", err); } 
-    finally { setIsSubmitting(false); }
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'categories', catDocId), {
+        name: editCatName.trim(), hasSchools: editCatHasSchools, skuPrefix: editSkuPrefix, packagingType: editPackagingType
+      });
+
+      if (linkedItemsCount > 0) {
+        inventorySnapshot.docs.forEach((d) => { batch.update(doc(db, 'inventory', d.id), { category: editCatName.trim() }); });
+      }
+      await batch.commit(); setEditingId(null);
+    } catch (err) { console.error(err); } finally { setIsSubmitting(false); }
+  };
+  // 📂 SUBTAB 2 TO 7 CREATION AND MODIFICATION LAYER CONTROLS
+  const [typeName, setTypeName] = useState('');
+  const [typeSku, setTypeSku] = useState('');
+  const [typeLabel, setTypeLabel] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState('Jumpers');
+  const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
+
+  const handleSecureDeleteRecord = async (collectionName: string, docId: string, label: string) => {
+    const key = prompt(`🔒 DELETION SECURITY hurdle:\nEnter passkey to erase "${label}":`);
+    if (key !== 'J4sp3r#M1sty') { alert("Access Denied."); return; }
+    try { await deleteDoc(doc(db, collectionName, docId)); } catch (e) { console.error(e); }
   };
 
-  const handleConfirmDeletion = async () => {
-    if (!itemToDelete) return;
+  const handleCreateDocumentPayload = async (e: React.FormEvent, col: string) => {
+    e.preventDefault();
     try {
-      const targetedTable = itemToDelete.table === 'types' ? 'clothingTypes' : itemToDelete.table;
-      await deleteDoc(doc(db, targetedTable, itemToDelete.id));
-      setItemToDelete(null);
-    } catch (err) { console.error("Registry document deletion blocked:", err); }
+      setIsSubmitting(true);
+      const ref = collection(db, col);
+
+      if (col === 'categories') {
+        const cleanId = newCatName.trim().toUpperCase().replace(/\s+/g, '_');
+        await addDoc(ref, { name: newCatName.trim(), id: cleanId, hasSchools: catHasSchools, skuPrefix: skuPrefix, packagingType, timestamp: new Date() });
+        setNewCatName(''); setCatHasSchools(false); setSkuPrefix(''); setPackagingType('Single');
+      } 
+      else if (col === 'schoolTypes') {
+        if (!typeName.trim() || !typeSku.trim()) return;
+        await addDoc(ref, { name: typeName.trim(), skuCode: typeSku.trim().toUpperCase() });
+        setTypeName(''); setTypeSku('');
+      } 
+      else if (col === 'schools') {
+        if (!typeName.trim() || !typeSku.trim() || selectedSchools.length === 0) return;
+        await addDoc(ref, { name: typeName.trim(), skuCode: typeSku.trim().toUpperCase(), schoolTypesList: selectedSchools });
+        setTypeName(''); setTypeSku(''); setSelectedSchools([]);
+      } 
+      else if (col === 'clothingTypes') {
+        if (!typeName.trim() || !typeSku.trim()) return;
+        await addDoc(ref, { name: typeName.trim(), skuCode: typeSku.trim().toUpperCase(), garmentCategory: selectedGroup });
+        setTypeName(''); setTypeSku('');
+      } 
+      else if (col === 'sizes') {
+        if (!typeName.trim() || !selectedGroup) return;
+        await addDoc(ref, { name: typeName.trim(), garmentCategory: selectedGroup });
+        setTypeName('');
+      } 
+      else {
+        if (!typeName.trim() || !typeSku.trim()) return;
+        await addDoc(ref, { name: typeName.trim(), label: typeName.trim(), skuCode: typeSku.trim().toUpperCase() });
+        setTypeName(''); setTypeSku('');
+      }
+    } catch (err) { console.error(err); } finally { setIsSubmitting(false); }
   };
+
+  const handleLaunchEdit = (item: any, col: string) => {
+    setEditingId(item.id);
+    setTypeName(item.name || item.label || '');
+    setTypeSku(item.skuCode || '');
+    setSelectedGroup(item.garmentCategory || 'Jumpers');
+    setSelectedSchools(item.schoolTypesList || []);
+    
+    setEditCatName(item.name || '');
+    setEditCatHasSchools(item.hasSchools === true);
+    setEditSkuPrefix(item.skuPrefix || '');
+    setEditPackagingType(item.packagingType || 'Single');
+  };
+  const handleUpdateStandardRecord = async (col: string, docId: string) => {
+    try {
+      const updateData: any = { name: typeName.trim(), label: typeName.trim() };
+      if (col !== 'sizes') updateData.skuCode = typeSku.trim().toUpperCase();
+      if (col === 'clothingTypes' || col === 'sizes') updateData.garmentCategory = selectedGroup;
+      if (col === 'schools') updateData.schoolTypesList = selectedSchools;
+
+      await updateDoc(doc(db, col, docId), updateData);
+      setEditingId(null); setTypeName(''); setTypeSku(''); setSelectedSchools([]);
+    } catch (e) { console.error(e); }
+  };
+
+  const toggleMultiSchoolSelect = (typeCode: string) => {
+    setSelectedSchools(prev => prev.includes(typeCode) ? prev.filter(c => c !== typeCode) : [...prev, typeCode]);
+  };
+
   return (
-    <div className="p-1 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 w-full text-left animate-fadeIn font-sans max-w-5xl relative">
+    <div className="w-full text-left select-none animate-fadeIn font-sans text-xs font-bold text-slate-700">
       
-      {/* COLUMN 1: CONFIGURE INPUT REGISTRATION PARAMETERS CONSOLE SCREEN CARD */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-5 h-fit space-y-4 shadow-xs border-t-4 border-brand-teal">
-        <div className="space-y-0.5">
-          <span className="text-[9px] font-mono font-black text-brand-teal uppercase tracking-widest">Setup Console</span>
-          <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Configure {activeView.title}</h4>
-        </div>
-
-        <form onSubmit={handleRegisterNewParameter} className="space-y-4 text-xs font-bold">
-          
-          {/* Main textual field name parameter configuration tag input */}
-          <div>
-            <label className="block mb-1 text-[10px] font-black text-slate-500 uppercase tracking-wider">{activeView.label}</label>
-            <input type="text" placeholder={`Enter unique profile label...`} value={formNameInput} onChange={(e) => setFormNameInput(e.target.value)} className="w-full p-2.5 border rounded-xl font-medium text-slate-800" />
+      {activeSubTab === 'categories' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start w-full">
+          <div className="bg-white border rounded-3xl p-5 shadow-xs border-t-4 border-brand-teal space-y-4">
+            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5"><Layers className="w-4 h-4 text-brand-teal" /> Master Categories Form</h4>
+            <form onSubmit={(e) => handleCreateDocumentPayload(e, 'categories')} className="space-y-4">
+              <div><label className="block mb-1 text-[10px] uppercase text-slate-500">Category Name</label><input type="text" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} className="w-full p-2 border rounded-xl" /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block mb-1 text-[10px] uppercase text-slate-500">SKU Prefix</label><input type="text" value={skuPrefix} onChange={(e) => handlePrefixTextNormalization(e.target.value, setSkuPrefix)} className="w-full p-2 border rounded-xl text-center" /></div>
+                <div><label className="block mb-1 text-[10px] uppercase text-slate-500">Format</label><select value={packagingType} onChange={(e) => setPackagingType(e.target.value as any)} className="w-full p-2 border rounded-xl bg-white"><option value="Single">Single Items</option><option value="VacPac">VacPac Only</option><option value="Both">Both Mixed</option></select></div>
+              </div>
+              <div className="flex items-center gap-3 p-3 bg-slate-50 border rounded-xl"><input type="checkbox" id="catHasSchools" checked={catHasSchools} onChange={(e) => setCatHasSchools(e.target.checked)} /><label htmlFor="catHasSchools">Linked to Schools?</label></div>
+              <button type="submit" className="w-full py-2.5 bg-slate-900 text-white uppercase rounded-xl">Register Category</button>
+            </form>
           </div>
-
-          {/* DYNAMIC FORMS MATRIX ADAPTER: Switches options custom based on management view layer */}
-          {currentManagementView === 'schools' ? (
-            <div className="space-y-4 animate-fadeIn">
-              <div><label className="block mb-1 text-[10px] font-black text-slate-500 uppercase tracking-wider">Campus Classification Tier</label><select value={formSchoolTypeChoice} onChange={(e) => setFormSchoolTypeChoice(e.target.value)} className="w-full p-2.5 border rounded-xl bg-white font-bold text-slate-700">{schoolTypes.map(st => <option key={st.id} value={st.skuCode}>{st.name} ({st.skuCode})</option>)}</select></div>
-              <div><label className="block mb-1 text-[10px] font-black text-slate-500 uppercase tracking-wider">{activeView.codeLabel}</label><input type="text" maxLength={4} placeholder="e.g. AHW, BKW, DD" value={formSchoolIdInput} onChange={(e) => setFormSchoolIdInput(e.target.value)} className="w-full p-2.5 border rounded-xl font-mono uppercase font-black text-brand-primary" /></div>
-            </div>
-          ) : (
-            <div className="animate-fadeIn">
-              <label className="block mb-1 text-[10px] font-black text-slate-500 uppercase tracking-wider">{activeView.codeLabel}</label>
-              <input type="text" placeholder="e.g. JUMP, OUT, RED" value={formSkuInput} onChange={(e) => setFormSkuInput(e.target.value)} className="w-full p-2.5 border rounded-xl font-mono uppercase font-black text-brand-primary" />
-            </div>
-          )}
-
-          {/* 📏 SIZING GROUP MATRIX BINDER DROPDOWN: Shows up ONLY when setting up Garment Types or Sizes */}
-          {(currentManagementView === 'types' || currentManagementView === 'sizes') && (
-            <div className="p-3 bg-slate-50 border rounded-xl space-y-1.5 animate-fadeIn">
-              <label className="block text-[10px] font-black text-brand-teal uppercase tracking-wider">📏 Bind Sizing Category Profile Matrix</label>
-              <select value={formSizeGroupChoice} onChange={(e) => setFormSizeGroupChoice(e.target.value)} className="w-full p-2 border rounded-lg bg-white text-slate-800 font-bold">
-                <option value="YOUTH_AGE">👕 Youth Clothing Sizing (Age Tracks: 3-4, 5-6)</option>
-                <option value="ADULT_LETTER">👕 Adult Clothing Letter Sizing (S, M, L, XL)</option>
-                <option value="WAIST_INCHES">🩳 Trousers & Skirts Waist Sizing (Inches)</option>
-                <option value="FOOTWEAR">👟 Footwear & Shoe Sizing (Numerical Sizes)</option>
-              </select>
-            </div>
-          )}
-
-          <button type="submit" disabled={isSubmitting} className="w-full py-2.5 px-4 bg-brand-primary text-white font-black uppercase tracking-wider rounded-xl cursor-pointer shadow-xs transition hover:brightness-105 flex items-center justify-center gap-1.5">{isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}<span>Register Component Code</span></button>
-        </form>
-      </div>
-      {/* COLUMN 2 & 3: THE FLAT WORKBOOK ARCHITECTURE METADATA REGISTRY LIST OVERVIEW SPREADSHEET */}
-      <div className="lg:col-span-2 space-y-4">
-        <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider select-none">Active Registered Parameters Log</h4>
-        
-        <div className="overflow-hidden border border-slate-200 bg-white rounded-2xl shadow-xs">
-          <table className="w-full text-left text-xs text-slate-600 border-collapse">
-            <thead className="bg-slate-50 text-slate-700 font-bold border-b select-none">
-              <tr>
-                <th className="px-4 py-3.5">Parameter Label Name</th>
-                <th className="px-4 py-3.5">SKU Key Component</th>
-                <th className="px-4 py-3.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-medium">
-              {activeView.items.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-50/40 transition">
-                  <td className="px-4 py-3.5 align-middle text-left font-black text-slate-900 text-xs">
-                    <div className="space-y-0.5">
-                      <span>{item.name}</span>
-                      {item.meta && (
-                        <span className="block text-[9px] font-mono font-black text-brand-teal uppercase tracking-wider">Bound Size Tier: {item.meta}</span>
-                      )}
+          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {categories.map((cat) => (
+              <div key={cat.id} className="bg-white border rounded-3xl p-5 shadow-xs flex flex-col justify-between gap-4">
+                {editingId === cat.id ? (
+                  <div className="space-y-3">
+                    <input type="text" value={editCatName} onChange={(e) => setEditCatName(e.target.value)} className="w-full p-2 border rounded-xl" />
+                    <div className="grid grid-cols-2 gap-3">
+                      <input type="text" value={editSkuPrefix} onChange={(e) => handlePrefixTextNormalization(e.target.value, setEditSkuPrefix)} className="w-full p-2 border rounded-xl text-center" />
+                      <select value={editPackagingType} onChange={(e) => setEditPackagingType(e.target.value as any)} className="w-full p-2 border rounded-xl bg-white"><option value="Single">Single</option><option value="VacPac">VacPac</option><option value="Both">Both</option></select>
                     </div>
-                  </td>
-                  <td className="px-4 py-3.5 align-middle text-left">
-                    <span className="inline-block text-[10px] font-mono font-black tracking-wider text-brand-primary bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded-md">
-                      {item.code || 'N/A'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5 text-right align-middle">
-                    <button type="button" onClick={() => setItemToDelete({ table: currentManagementView, id: item.id, name: item.name })} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg cursor-pointer transition"><Trash2 className="w-3.5 h-3.5" /></button>
-                  </td>
-                </tr>
-              ))}
-              {activeView.items.length === 0 && (
-                <tr><td colSpan={3} className="text-center py-8 text-slate-400 italic select-none">No active profiles registered inside this parameter sub-tab database table node.</td></tr>
-              )}
-            </tbody>
-          </table>
+                    <div className="flex gap-2 py-1"><input type="checkbox" id="editHasSchoolCheck" checked={editCatHasSchools} onChange={(e) => setEditCatHasSchools(e.target.checked)} /><label htmlFor="editHasSchoolCheck">Linked to Schools?</label></div>
+                    <div className="flex gap-2"><button type="button" onClick={() => handleUpdateMasterCategory(cat.docId || cat.id, cat.id, cat.name)} className="flex-1 py-1.5 bg-emerald-600 text-white rounded-xl uppercase text-[10px]">Save</button><button type="button" onClick={() => setEditingId(null)} className="py-1.5 px-3 bg-slate-100 rounded-xl">Cancel</button></div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-start"><h5 className="font-black text-slate-900 text-sm">{cat.name}</h5><span className="w-7 h-7 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center font-mono border">{cat.skuPrefix || 'U'}</span></div>
+                    <div className="flex justify-between border-t pt-3 text-[10px] text-slate-400 font-mono"><span>{cat.hasSchools ? '🏛️ School Linked' : '📦 Plain Stock'}</span><span>📦 {cat.packagingType || 'Single'}</span></div>
+                    {userRole === 'Master_Dev' && <div className="flex gap-2 justify-end pt-1 border-t mt-2"><button type="button" onClick={() => handleLaunchEdit(cat, 'categories')} className="text-teal-600 underline">Edit</button><button type="button" onClick={() => handleSecureDeleteRecord('categories', cat.docId || cat.id, cat.name)} className="text-rose-500 hover:text-rose-700"><Trash2 className="w-3.5 h-3.5" /></button></div>}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* ACTION DIALOG CONFIRMATION DELETION LIGHTBOX PANEL MODAL */}
-      {itemToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-xs select-none">
-          <div className="absolute inset-0" onClick={() => setItemToDelete(null)} />
-          <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full border overflow-hidden relative z-10 p-5 space-y-4 text-left animate-fadeIn">
-            <div className="flex items-center gap-2 text-red-600 font-black text-sm uppercase tracking-wide"><AlertTriangle className="w-5 h-5 shrink-0" /><span>Confirm Database Removal</span></div>
-            <p className="text-xs text-slate-500 font-medium leading-relaxed">Are you absolutely sure you want to permanently delete this option? Stock records relying on this code prefix segment may become unlinked.</p>
-            <div className="p-3 bg-slate-50 rounded-xl font-mono text-xs font-bold text-slate-700 truncate">{itemToDelete.name}</div>
-            <div className="flex justify-end gap-2 pt-2 border-t text-xs font-bold">
-              <button type="button" onClick={() => setItemToDelete(null)} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl cursor-pointer">Cancel</button>
-              <button type="button" onClick={handleConfirmDeletion} className="px-4 py-2 bg-red-600 text-white rounded-xl shadow-md cursor-pointer">Delete Option</button>
-            </div>
+      {/* 🏛️ SUBTAB 2: SCHOOL TYPES CONFIGURATION CONSOLE */}
+      {activeSubTab === 'schoolTypes' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start w-full">
+          <div className="bg-white border rounded-3xl p-5 shadow-xs border-t-4 border-indigo-500 space-y-4">
+            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5"><Clock className="w-4 h-4 text-indigo-500" /> Configure School Type</h4>
+            <form onSubmit={(e) => handleCreateDocumentPayload(e, 'schoolTypes')} className="space-y-4">
+              <div><label className="block mb-1 text-[10px] uppercase text-slate-400">Type Name (e.g. Junior)</label><input type="text" value={typeName} onChange={(e) => setTypeName(e.target.value)} className="w-full p-2.5 border rounded-xl" /></div>
+              <div><label className="block mb-1 text-[10px] uppercase text-slate-400">SKU Code (Strictly 1 Letter e.g. J)</label><input type="text" value={typeSku} onChange={(e) => handlePrefixTextNormalization(e.target.value, setTypeSku)} className="w-full p-2.5 border rounded-xl text-center font-mono" /></div>
+              <button type="submit" className="w-full py-2.5 bg-slate-900 text-white uppercase rounded-xl">Register Type</button>
+            </form>
+          </div>
+          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {schoolTypes.map(st => (
+              <div key={st.id} className="bg-white border rounded-3xl p-4 shadow-xs flex items-center justify-between">
+                {editingId === st.id ? (
+                  <div className="w-full space-y-2 flex flex-col"><input type="text" value={typeName} onChange={(e) => setTypeName(e.target.value)} className="w-full p-1.5 border rounded-lg" /><input type="text" value={typeSku} onChange={(e) => handlePrefixTextNormalization(e.target.value, setTypeSku)} className="w-full p-1.5 border rounded-lg text-center" /><div className="flex gap-2"><button onClick={() => handleUpdateStandardRecord('schoolTypes', st.id)} className="flex-1 bg-emerald-600 text-white p-1 rounded-lg text-[10px]">Save</button><button onClick={() => setEditingId(null)} className="bg-slate-100 p-1 rounded-lg">Cancel</button></div></div>
+                ) : (
+                  <>
+                    <div><h5 className="font-black text-slate-900 text-xs">{st.name}</h5><span className="text-[10px] font-mono text-slate-400 uppercase">Code Variant: {st.skuCode}</span></div>
+                    <div className="flex gap-2"><button onClick={() => handleLaunchEdit(st, 'schoolTypes')} className="text-teal-600 underline">Edit</button><button onClick={() => handleSecureDeleteRecord('schoolTypes', st.id, st.name)} className="text-slate-300 hover:text-rose-600"><Trash2 className="w-3.5 h-3.5" /></button></div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* 🏛️ SUBTAB 3: SCHOOL REGISTRY MULTI-SELECT MANAGER */}
+      {activeSubTab === 'schools' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start w-full">
+          <div className="bg-white border rounded-3xl p-5 shadow-xs border-t-4 border-teal-600 space-y-4">
+            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5"><School className="w-4 h-4 text-teal-600" /> School Registry Form</h4>
+            <form onSubmit={(e) => handleCreateDocumentPayload(e, 'schools')} className="space-y-4">
+              <div><label className="block mb-1 text-[10px] uppercase text-slate-400">School Name</label><input type="text" value={typeName} onChange={(e) => setTypeName(e.target.value)} className="w-full p-2.5 border rounded-xl" /></div>
+              <div><label className="block mb-1 text-[10px] uppercase text-slate-400">School SKU Prefix</label><input type="text" value={typeSku} onChange={(e) => setTypeSku(e.target.value)} className="w-full p-2.5 border rounded-xl uppercase" /></div>
+              <div>
+                <label className="block mb-1 text-[10px] uppercase text-slate-400">Select School Types (Multiple)</label>
+                <div className="flex gap-1.5 flex-wrap pt-1">
+                  {schoolTypes.map(st => (
+                    <button type="button" key={st.id} onClick={() => toggleMultiSchoolSelect(st.skuCode)} className={`py-1 px-2 border rounded-lg font-mono text-[10px] ${selectedSchools.includes(st.skuCode) ? 'bg-teal-600 text-white border-transparent' : 'bg-slate-50 text-slate-500'}`}>{st.name} ({st.skuCode})</button>
+                  ))}
+                </div>
+              </div>
+              <button type="submit" className="w-full py-2.5 bg-slate-900 text-white uppercase rounded-xl">Register School</button>
+            </form>
+          </div>
+          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {schools.map(s => (
+              <div key={s.id} className="bg-white border rounded-3xl p-4 shadow-xs flex items-center justify-between gap-3">
+                {editingId === s.id ? (
+                  <div className="w-full space-y-2 text-left"><input type="text" value={typeName} onChange={(e) => setTypeName(e.target.value)} className="w-full p-2 border rounded-xl" /><input type="text" value={typeSku} onChange={(e) => setTypeSku(e.target.value)} className="w-full p-2 border rounded-xl uppercase" /><div className="flex gap-1.5 flex-wrap">{schoolTypes.map(st => (<button type="button" key={st.id} onClick={() => toggleMultiSchoolSelect(st.skuCode)} className={`py-1 px-2 border rounded-lg text-[10px] ${selectedSchools.includes(st.skuCode) ? 'bg-teal-600 text-white' : 'bg-slate-50'}`}>{st.skuCode}</button>))}</div><div className="flex gap-2"><button onClick={() => handleUpdateStandardRecord('schools', s.id)} className="flex-1 bg-emerald-600 text-white p-1.5 rounded-xl text-[10px]">Save</button><button onClick={() => setEditingId(null)} className="bg-slate-100 p-1.5 rounded-xl">Cancel</button></div></div>
+                ) : (
+                  <>
+                    <div className="truncate"><h5 className="font-black text-slate-900 text-xs truncate">{s.name}</h5><div className="flex gap-1.5 mt-1 font-mono text-[9px] uppercase font-bold text-teal-600 flex-wrap">{s.schoolTypesList ? s.schoolTypesList.map((t: string) => <span key={t} className="bg-teal-50 border px-1 rounded-sm">{t}</span>) : <span className="bg-slate-100 px-1 rounded-sm text-slate-400">N/A</span>}<span className="text-slate-400 ml-auto">SKU: {s.skuCode}</span></div></div>
+                    <div className="flex gap-2 shrink-0"><button onClick={() => handleLaunchEdit(s, 'schools')} className="text-teal-600 underline">Edit</button><button onClick={() => handleSecureDeleteRecord('schools', s.id, s.name)} className="text-slate-300 hover:text-rose-600"><Trash2 className="w-3.5 h-3.5" /></button></div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 👔 SUBTAB 4: GARMENT TYPES DESIGN CATEGORIZATION BAR */}
+      {activeSubTab === 'types' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start w-full">
+          <div className="bg-white border rounded-3xl p-5 shadow-xs border-t-4 border-indigo-600 space-y-4">
+            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5"><Shirt className="w-4 h-4 text-indigo-600" /> Inscribe Garment Type</h4>
+            <form onSubmit={(e) => handleCreateDocumentPayload(e, 'clothingTypes')} className="space-y-4">
+              <div><label className="block mb-1 text-[10px] uppercase text-slate-400">Garment Name</label><input type="text" value={typeName} onChange={(e) => setTypeName(e.target.value)} className="w-full p-2.5 border rounded-xl" /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block mb-1 text-[10px] uppercase text-slate-400">SKU Code</label><input type="text" value={typeSku} onChange={(e) => setTypeSku(e.target.value)} className="w-full p-2.5 border rounded-xl uppercase" /></div>
+                <div><label className="block mb-1 text-[10px] uppercase text-slate-400">Sizing Category Map</label><select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)} className="w-full p-2.5 border rounded-xl bg-white"><option value="Shoes">Shoes</option><option value="Jumpers">Jumpers / Tops</option><option value="Trouser/Skirts">Trouser / Skirts</option></select></div>
+              </div>
+              <button type="submit" className="w-full py-2.5 bg-slate-900 text-white uppercase rounded-xl">Register Garment</button>
+            </form>
+          </div>
+          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {clothingTypes.map(g => (
+              <div key={g.id} className="bg-white border rounded-2xl p-4 shadow-xs flex items-center justify-between gap-3">
+                {editingId === g.id ? (
+                  <div className="w-full space-y-2"><input type="text" value={typeName} onChange={(e) => setTypeName(e.target.value)} className="w-full p-1.5 border rounded-lg" /><input type="text" value={typeSku} onChange={(e) => setTypeSku(e.target.value)} className="w-full p-1.5 border rounded-lg uppercase" /><select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)} className="w-full p-1.5 border rounded-lg bg-white"><option value="Shoes">Shoes</option><option value="Jumpers">Jumpers</option><option value="Trouser/Skirts">Trouser/Skirts</option></select><div className="flex gap-2"><button onClick={() => handleUpdateStandardRecord('clothingTypes', g.id)} className="flex-1 bg-emerald-600 text-white p-1 rounded-lg">Save</button><button onClick={() => setEditingId(null)} className="bg-slate-100 p-1 rounded-lg">Cancel</button></div></div>
+                ) : (
+                  <>
+                    <div className="truncate"><span className="font-black text-slate-800 text-xs truncate block">{g.name}</span><span className="text-[10px] font-mono font-bold text-slate-400 block mt-0.5 uppercase">SKU: {g.skuCode} | Map: {g.garmentCategory || 'Jumpers'}</span></div>
+                    <div className="flex gap-2"><button onClick={() => handleLaunchEdit(g, 'clothingTypes')} className="text-teal-600 underline">Edit</button><button onClick={() => handleSecureDeleteRecord('clothingTypes', g.id, g.name)} className="text-slate-300 hover:text-rose-600"><Trash2 className="w-3.5 h-3.5" /></button></div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* 📏 SUBTAB 5: SIZES OPTION MAPPED SYSTEM PANEL */}
+      {activeSubTab === 'sizes' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start w-full">
+          <div className="bg-white border rounded-3xl p-5 shadow-xs border-t-4 border-slate-700 space-y-4">
+            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5"><Maximize2 className="w-4 h-4 text-slate-700" /> Inscribe Sizing Profile</h4>
+            <form onSubmit={(e) => handleCreateDocumentPayload(e, 'sizes')} className="space-y-4">
+              <div><label className="block mb-1 text-[10px] uppercase text-slate-400">Size Descriptor Label (e.g. 2-3yrs)</label><input type="text" value={typeName} onChange={(e) => setTypeName(e.target.value)} className="w-full p-2.5 border rounded-xl" /></div>
+              <div><label className="block mb-1 text-[10px] uppercase text-slate-400">Garment Category Assignment</label><select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)} className="w-full p-2.5 border rounded-xl bg-white"><option value="Shoes">Shoes</option><option value="Jumpers">Jumpers / Tops</option><option value="Trouser/Skirts">Trouser / Skirts</option></select></div>
+              <button type="submit" className="w-full py-2.5 bg-slate-900 text-white uppercase rounded-xl">Commit Size</button>
+            </form>
+          </div>
+          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {sizes.map(sz => (
+              <div key={sz.id} className="bg-white border rounded-xl p-3 shadow-xs flex items-center justify-between gap-2">
+                {editingId === sz.id ? (
+                  <div className="w-full space-y-2"><input type="text" value={typeName} onChange={(e) => setTypeName(e.target.value)} className="w-full p-1.5 border rounded-lg" /><select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)} className="w-full p-1.5 border rounded-lg bg-white"><option value="Shoes">Shoes</option><option value="Jumpers">Jumpers</option><option value="Trouser/Skirts">Trouser/Skirts</option></select><div className="flex gap-2"><button onClick={() => handleUpdateStandardRecord('sizes', sz.id)} className="flex-1 bg-emerald-600 text-white p-1 rounded-lg">Save</button><button onClick={() => setEditingId(null)} className="bg-slate-100 p-1 rounded-lg">Cancel</button></div></div>
+                ) : (
+                  <>
+                    <div className="font-mono font-black text-[11px] text-slate-800 uppercase truncate"><span>{sz.name}</span><span className="block text-[9px] text-slate-400 font-sans tracking-normal font-medium mt-0.5">Category Match: {sz.garmentCategory || 'Jumpers'}</span></div>
+                    <div className="flex gap-2 shrink-0"><button onClick={() => handleLaunchEdit(sz, 'sizes')} className="text-teal-600 underline">Edit</button><button onClick={() => handleSecureDeleteRecord('sizes', sz.id, sz.name)} className="text-slate-300 hover:text-rose-600"><Trash2 className="w-3.5 h-3.5" /></button></div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 🎨 SUBTAB 6 & 7: COLOURS PROFILE AND LOCATIONS TRACKING CONSOLES */}
+      {['colours', 'locations'].includes(activeSubTab) && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start w-full">
+          <div className="bg-white border rounded-3xl p-5 shadow-xs border-t-4 border-slate-700 space-y-4">
+            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5"><Palette className="w-4 h-4 text-slate-700" /> Configure {activeSubTab === 'colours' ? 'Colour' : 'Location'}</h4>
+            <form onSubmit={(e) => handleCreateDocumentPayload(e, activeSubTab)} className="space-y-4">
+              <div><label className="block mb-1 text-[10px] uppercase text-slate-400">Name Descriptor</label><input type="text" value={typeName} onChange={(e) => setTypeName(e.target.value)} className="w-full p-2.5 border rounded-xl" /></div>
+              <div><label className="block mb-1 text-[10px] uppercase text-slate-400">SKU Field Identifier Code</label><input type="text" value={typeSku} onChange={(e) => setTypeSku(e.target.value)} className="w-full p-2.5 border rounded-xl uppercase" /></div>
+              <button type="submit" className="w-full py-2.5 bg-slate-900 text-white uppercase rounded-xl">Commit Lookup Value</button>
+            </form>
+          </div>
+          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {(activeSubTab === 'colours' ? colours : locations).map((item: any) => (
+              <div key={item.id} className="bg-white border rounded-xl p-3 shadow-xs flex items-center justify-between gap-2 font-mono text-[11px] font-black uppercase text-slate-800">
+                {editingId === item.id ? (
+                  <div className="w-full space-y-2"><input type="text" value={typeName} onChange={(e) => setTypeName(e.target.value)} className="w-full p-1.5 border rounded-lg" /><input type="text" value={typeSku} onChange={(e) => setTypeSku(e.target.value)} className="w-full p-1.5 border rounded-lg uppercase" /><div className="flex gap-2"><button onClick={() => handleUpdateStandardRecord(activeSubTab, item.id)} className="flex-1 bg-emerald-600 text-white p-1 rounded-lg">Save</button><button onClick={() => setEditingId(null)} className="bg-slate-100 p-1 rounded-lg">Cancel</button></div></div>
+                ) : (
+                  <>
+                    <div className="truncate"><span>{item.name || item.label}</span><span className="block text-[9px] text-slate-400 font-sans tracking-normal font-medium mt-0.5">SKU Parameter: {item.skuCode || 'N/A'}</span></div>
+                    <div className="flex gap-2 shrink-0"><button onClick={() => handleLaunchEdit(item, activeSubTab)} className="text-teal-600 underline">Edit</button><button onClick={() => handleSecureDeleteRecord(activeSubTab, item.id, item.name || item.label)} className="text-slate-300 hover:text-rose-600"><Trash2 className="w-3.5 h-3.5" /></button></div>
+                  </>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}

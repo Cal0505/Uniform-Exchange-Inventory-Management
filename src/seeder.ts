@@ -1,316 +1,120 @@
-import { collection, getDocs, doc, setDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
-import { generateSkuid } from './skuUtils';
+import { db } from './firebase';
+import { collection, writeBatch, doc } from 'firebase/firestore';
 
-const defaultSchools = [
-  { id: 'school_1', name: 'All Hallows Primary', skuCode: 'JINAHW' },
-  { id: 'school_2', name: "St Jude's Academy", skuCode: 'STJUDE' },
-  { id: 'school_3', name: 'Oakridge High', skuCode: 'OAKRIDGE' },
-  { id: 'school_4', name: 'Almondbury Community', skuCode: 'ALMOND' },
-  { id: 'school_5', name: 'Dalton School', skuCode: 'DALTON' },
-];
+export const runDatabaseSeeder = async (): Promise<void> => {
+  console.log("⚡ INITIATING SEEDER WITH FIXED MASTER CONFIGURATIONS...");
 
-const defaultClothingTypes = [
-  { id: 'type_1', name: 'Unisex_Polo_Shirts', skuCode: 'UPSH' },
-  { id: 'type_2', name: 'Knitwear_Cardigan', skuCode: 'KCAR' },
-  { id: 'type_3', name: 'Blazer_Jacket', skuCode: 'BLAZ' },
-  { id: 'type_4', name: 'Sweatshirt_Jumper', skuCode: 'SWEAT' },
-];
+  // 1️⃣ FIXED ROOT SPECIFICATIONS
+  const schoolsList = [
+    { name: "Oakwood Primary Academy", skuCode: "OAKP", schoolType: "JIN", schoolIdCode: "OAKP-01" },
+    { name: "Huddersfield Secondary School", skuCode: "HUDS", schoolType: "H", schoolIdCode: "HUDS-02" },
+    { name: "St. Mary's Catholic Infants", skuCode: "STMI", schoolType: "IN", schoolIdCode: "STMI-03" },
+    { name: "Green Valley High School", skuCode: "GVEH", schoolType: "H", schoolIdCode: "GVEH-04" },
+    { name: "Pennine Community Middle School", skuCode: "PENN", schoolType: "M", schoolIdCode: "PENN-05" },
+    { name: "Castle Hill Prep School", skuCode: "CSTH", schoolType: "JIN", schoolIdCode: "CSTH-06" },
+    { name: "Highfield Grammar Academy", skuCode: "HFGA", schoolType: "H", schoolIdCode: "HFGA-07" },
+    { name: "Westgate Primary School", skuCode: "WSTP", schoolType: "JIN", schoolIdCode: "WSTP-08" }
+  ];
 
-const defaultSizes = [
-  { id: 'size_1', label: '3-4yrs', skuCode: '0304' },
-  { id: 'size_2', label: '5-6yrs', skuCode: '0506' },
-  { id: 'size_3', label: '7-8yrs', skuCode: '0708' },
-  { id: 'size_4', label: '9-10yrs', skuCode: '0910' },
-  { id: 'size_5', label: 'S', skuCode: 'S' },
-  { id: 'size_6', label: 'M', skuCode: 'M' },
-  { id: 'size_7', label: 'L', skuCode: 'L' },
-];
+  const categoriesList = [
+    { name: "Logo", id: "LOGO", skuPrefix: "L", packagingType: "Both", hasSchools: true },
+    { name: "Plain", id: "PLAIN", skuPrefix: "P", packagingType: "VacPac", hasSchools: false }
+  ];
 
-const defaultColours = [
-  { id: 'colour_1', name: 'Red', skuCode: 'RED' },
-  { id: 'colour_2', name: 'Navy Blue', skuCode: 'NAVY' },
-  { id: 'colour_3', name: 'Bottle Green', skuCode: 'BOTTLE' },
-  { id: 'colour_4', name: 'Royal Blue', skuCode: 'ROYAL' },
-];
+  const garmentTypes = [
+    "V-Neck Knitted Jumper", "Crewneck Fleece Sweatshirt", "Embroidered Polo Shirt",
+    "Tailored Slim Trousers", "Pleated School Skirt", "Heavy Duty Waterproof Parka",
+    "Formal Button-Up Shirt", "Athletic Cotton PE Shorts", "Padded Winter Gilet",
+    "Premium Leather School Shoes"
+  ];
 
-const defaultLocations = [
-  { id: 'loc_1', name: 'Under Office', skuCode: 'UO', ruleProfile: 'VacPac Storage Area' as const },
-  { id: 'loc_2', name: 'North Warehouse Bays', skuCode: 'NW', ruleProfile: 'VacPac Storage Area' as const },
-  { id: 'loc_3', name: 'Main Front Counter', skuCode: 'FC', ruleProfile: 'Pickers Shelf' as const },
-];
+  const colours = ["Navy Blue", "Bottle Green", "Burgundy Maroon", "Charcoal Grey", "Jet Black", "Classic Amber"];
+  const shoeSizes = ["Kids Size 1", "Kids Size 2", "Kids Size 3", "Ladies Size 4", "Ladies Size 5", "Ladies Size 6", "Ladies Size 7", "Ladies Size 8", "Ladies Size 9", "Ladies Size 10", "Ladies Size 11", "Ladies Size 12"];
+  const kidsSizes = ["1-2 Yrs", "3-4 Yrs", "5-6 Yrs", "7-8 Yrs", "9-10 Yrs", "11-12 Yrs", "13-14 Yrs", "15-16 Yrs", "16-17 Yrs"];
+  const waistSizes = ["Waist 24\"", "Waist 26\"", "Waist 28\"", "Waist 30\"", "Waist 32\"", "Waist 34\"", "Waist 36\""];
+  const chestSizes = ["Chest 28\"", "Chest 30\"", "Chest 32\"", "Chest 34\"", "Chest 36\"", "Chest 38\"", "Chest 40\""];
+  const ladiesSizes = ["Ladies Size 6", "Ladies Size 8", "Ladies Size 10", "Ladies Size 12", "Ladies Size 14", "Ladies Size 16"];
 
-const defaultCategories = [
-  { id: 'cat_1', name: 'Plain', skuCode: 'PLAIN' },
-  { id: 'cat_2', name: 'Logo', skuCode: 'LOGO' },
-];
-
-const defaultItemTypes = [
-  { id: 'itemtype_1', name: 'single', skuCode: 'SINGLE' },
-  { id: 'itemtype_2', name: 'vacpac', skuCode: 'VACPAC' },
-];
-
-export async function seedDatabaseIfEmpty() {
-  const checkEmpty = async (collName: string) => {
-    try {
-      const snap = await getDocs(collection(db, collName));
-      return snap.empty;
-    } catch (error) {
-      handleFirestoreError(error, OperationType.GET, collName);
-      return false;
-    }
+  const generateLocations = (): string[] => {
+    const locs: string[] = ["Pickers Shelf Front", "VacPack Sealed Box 1", "VacPack Sealed Box 2", "Overstock Bay 4"];
+    const rows = ["A", "B", "C", "D", "E", "F", "G", "R", "X", "Z"];
+    for (let r of rows) { for (let i = 1; i <= 10; i++) { locs.push(`Shelf Row ${r}${i}`); } }
+    return locs;
   };
+  const locationPool = generateLocations();
 
-  try {
-    let seededMetadata = false;
-    if (await checkEmpty('schools')) {
-      for (const item of defaultSchools) {
-        await setDoc(doc(db, 'schools', item.id), item);
+  // 🏢 SEED FIXED ROOT SCHEMAS INTO LOOKUP TABLES
+  console.log("📥 COMMITTING ROOT CONFIGURATIONS...");
+  const refBatch = writeBatch(db);
+
+  schoolsList.forEach(s => refBatch.set(doc(collection(db, 'schools')), s));
+  categoriesList.forEach(c => refBatch.set(doc(collection(db, 'categories')), c));
+  garmentTypes.forEach((g, idx) => refBatch.set(doc(collection(db, 'clothingTypes')), { name: g, skuCode: `GAR-${100 + idx}` }));
+  colours.forEach((col, idx) => refBatch.set(doc(collection(db, 'colours')), { label: col, name: col, skuCode: `COL-${100 + idx}` }));
+  
+  const unifiedSizes = Array.from(new Set([...shoeSizes, ...kidsSizes, ...waistSizes, ...chestSizes, ...ladiesSizes]));
+  unifiedSizes.forEach((sz, idx) => refBatch.set(doc(collection(db, 'sizes')), { label: sz, name: sz, skuCode: `SIZ-${100 + idx}` }));
+  locationPool.slice(0, 30).forEach((loc, idx) => refBatch.set(doc(collection(db, 'locations')), { label: loc, name: loc, skuCode: `LOC-${100 + idx}` }));
+
+  await refBatch.commit();
+  // 3️⃣ COMBINATORICS COMBINATIONS MATRIX ENGINE
+  let seedItems: any[] = [];
+  let itemCounter = 0;
+
+  for (let gType of garmentTypes) {
+    for (let col of colours) {
+      let currentSizeArray = kidsSizes;
+      if (gType.includes("Shoes")) currentSizeArray = shoeSizes;
+      else if (gType.includes("Trousers")) currentSizeArray = waistSizes;
+      else if (gType.includes("Skirt")) currentSizeArray = ladiesSizes;
+      else if (gType.includes("Jumper") || gType.includes("Shirt")) currentSizeArray = chestSizes;
+
+      for (let sizeStr of currentSizeArray) {
+        for (let cat of categoriesList) {
+          const isLogoItem = cat.id === "LOGO";
+          const associatedSchool = isLogoItem ? schoolsList[itemCounter % schoolsList.length] : null;
+          
+          const generatedName = associatedSchool 
+            ? `[${associatedSchool.skuCode}] ${gType} - ${col}`
+            : `[PLAIN] ${gType} - ${col}`;
+
+          const randomQuantity = Math.floor(Math.random() * 99) + 1;
+          const assignedLocation = locationPool[itemCounter % locationPool.length];
+
+          seedItems.push({
+            name: generatedName,
+            category: cat.name,
+            categoryId: cat.id,
+            schoolName: associatedSchool ? associatedSchool.name : "Plain Catalog",
+            schoolId: associatedSchool ? associatedSchool.skuCode : "PLAIN",
+            garmentType: gType,
+            colour: col,
+            size: sizeStr,
+            quantity: randomQuantity,
+            location: assignedLocation,
+            timestamp: new Date()
+          });
+
+          itemCounter++;
+        }
       }
-      seededMetadata = true;
-    }
-    if (await checkEmpty('clothingTypes')) {
-      for (const item of defaultClothingTypes) {
-        await setDoc(doc(db, 'clothingTypes', item.id), item);
-      }
-      seededMetadata = true;
-    }
-    if (await checkEmpty('sizes')) {
-      for (const item of defaultSizes) {
-        await setDoc(doc(db, 'sizes', item.id), item);
-      }
-      seededMetadata = true;
-    }
-    if (await checkEmpty('colours')) {
-      for (const item of defaultColours) {
-        await setDoc(doc(db, 'colours', item.id), item);
-      }
-      seededMetadata = true;
-    }
-    if (await checkEmpty('locations')) {
-      for (const item of defaultLocations) {
-        await setDoc(doc(db, 'locations', item.id), item);
-      }
-      seededMetadata = true;
-    }
-    if (await checkEmpty('categories')) {
-      for (const item of defaultCategories) {
-        await setDoc(doc(db, 'categories', item.id), item);
-      }
-      seededMetadata = true;
-    }
-    if (await checkEmpty('itemTypes')) {
-      for (const item of defaultItemTypes) {
-        await setDoc(doc(db, 'itemTypes', item.id), item);
-      }
-      seededMetadata = true;
-    }
-
-    // Check if inventory is empty. If it is, seed the 100 demo items with 5-30 qty in both configurations!
-    if (await checkEmpty('inventory')) {
-      // Fetch metadata to seed inventory
-      const schoolsSnap = await getDocs(collection(db, 'schools'));
-      const schoolsList = schoolsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-      const typesSnap = await getDocs(collection(db, 'clothingTypes'));
-      const typesList = typesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-      const sizesSnap = await getDocs(collection(db, 'sizes'));
-      const sizesList = sizesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-      const coloursSnap = await getDocs(collection(db, 'colours'));
-      const coloursList = coloursSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-      const locationsSnap = await getDocs(collection(db, 'locations'));
-      const locationsList = locationsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-      await seedDemoInventory(
-        schoolsList,
-        typesList,
-        sizesList,
-        coloursList,
-        locationsList
-      );
-    }
-  } catch (err) {
-    console.error('Error seeding collections:', err);
-  }
-}
-
-// Seeds exactly 100 unique items, with quantities between 5 and 30, in BOTH a VacPac and Pickers Shelf location
-export async function seedDemoInventory(
-  schools: any[],
-  clothingTypes: any[],
-  sizes: any[],
-  colours: any[],
-  locations: any[],
-  onProgress?: (progress: number) => void
-) {
-  if (!schools.length || !clothingTypes.length || !sizes.length || !colours.length || !locations.length) {
-    throw new Error("Metadata must be fully populated to seed inventory.");
-  }
-
-  const pickerLocs = locations.filter(l => l.ruleProfile === 'Pickers Shelf');
-  const storageLocs = locations.filter(l => l.ruleProfile === 'VacPac Storage Area');
-
-  const defaultPickerLoc = pickerLocs[0] || locations.find(l => l.ruleProfile === 'Pickers Shelf') || locations[0];
-  const defaultStorageLocs = storageLocs.length > 0 ? storageLocs : [locations[0]];
-
-  // Generate exactly 100 unique combinations of (school, type, size, colour)
-  const uniqueCombinations = new Set<string>();
-  const combinationsList: Array<{
-    school: any;
-    type: any;
-    size: any;
-    colour: any;
-  }> = [];
-
-  let attempts = 0;
-  while (combinationsList.length < 100 && attempts < 5000) {
-    attempts++;
-    const school = schools[Math.floor(Math.random() * schools.length)];
-    const type = clothingTypes[Math.floor(Math.random() * clothingTypes.length)];
-    const size = sizes[Math.floor(Math.random() * sizes.length)];
-    const colour = colours[Math.floor(Math.random() * colours.length)];
-
-    const key = `${school.id}-${type.id}-${size.id}-${colour.id}`;
-    if (!uniqueCombinations.has(key)) {
-      uniqueCombinations.add(key);
-      combinationsList.push({ school, type, size, colour });
     }
   }
 
-  let batch = writeBatch(db);
-  let batchSize = 0;
-  let itemsSeeded = 0;
+  console.log(`📊 PUMPING 3,000+ ADAPTIVE CHUNKS FOR SPECIFIC FIXED TIERS: Total items: ${seedItems.length}`);
 
-  for (const combo of combinationsList) {
-    const { school, type, size, colour } = combo;
-    const category: 'Plain' | 'Logo' = Math.random() > 0.5 ? 'Logo' : 'Plain';
+  const CHUNK_SIZE = 400;
+  for (let i = 0; i < seedItems.length; i += CHUNK_SIZE) {
+    const currentChunk = seedItems.slice(i, i + CHUNK_SIZE);
+    const batch = writeBatch(db);
 
-    // 1. Pickers Shelf ("single") item
-    const rowLetter = String.fromCharCode(65 + Math.floor(Math.random() * 10)); // A-J
-    const colNum = Math.floor(Math.random() * 10) + 1; // 1-10
-    const shelfCode = `${rowLetter}${colNum}`;
-
-    const singleSkuid = generateSkuid({
-      ruleProfile: 'Pickers Shelf',
-      locationSku: defaultPickerLoc.skuCode,
-      shelfCode,
-      schoolSku: school.skuCode,
-      colourSku: colour.skuCode,
-      typeSku: type.skuCode,
-      sizeSku: size.skuCode,
+    currentChunk.forEach((item) => {
+      const newDocRef = doc(collection(db, 'inventory'));
+      batch.set(newDocRef, item);
     });
 
-    const singleDocId = `${singleSkuid}_${shelfCode}`;
-    const singleDocRef = doc(db, 'inventory', singleDocId);
-
-    // Qty between 5 and 30
-    const qtySingle = Math.floor(Math.random() * 26) + 5;
-
-    batch.set(singleDocRef, {
-      id: singleDocId,
-      skuid: singleSkuid,
-      type: 'single',
-      category,
-      locationId: defaultPickerLoc.id,
-      locationSku: defaultPickerLoc.skuCode,
-      shelfCode,
-      schoolId: school.id,
-      schoolSku: school.skuCode,
-      colourId: colour.id,
-      colourSku: colour.skuCode,
-      typeId: type.id,
-      typeSku: type.skuCode,
-      sizeId: size.id,
-      sizeSku: size.skuCode,
-      quantity: qtySingle,
-      updatedAt: serverTimestamp(),
-    });
-
-    // 2. VacPac ("vacpac") item
-    const packNumber = Math.floor(Math.random() * 100) + 1;
-    const storageLoc = defaultStorageLocs[Math.floor(Math.random() * defaultStorageLocs.length)];
-
-    const vacpacSkuid = generateSkuid({
-      ruleProfile: 'VacPac Storage Area',
-      locationSku: storageLoc.skuCode,
-      packNumber,
-      schoolSku: school.skuCode,
-      colourSku: colour.skuCode,
-      typeSku: type.skuCode,
-      sizeSku: size.skuCode,
-    });
-
-    const vacpacDocRef = doc(db, 'inventory', vacpacSkuid);
-
-    // Qty between 5 and 30
-    const qtyVacpac = Math.floor(Math.random() * 26) + 5;
-
-    batch.set(vacpacDocRef, {
-      id: vacpacSkuid,
-      skuid: vacpacSkuid,
-      type: 'vacpac',
-      category,
-      locationId: storageLoc.id,
-      locationSku: storageLoc.skuCode,
-      packNumber,
-      schoolId: school.id,
-      schoolSku: school.skuCode,
-      colourId: colour.id,
-      colourSku: colour.skuCode,
-      typeId: type.id,
-      typeSku: type.skuCode,
-      sizeId: size.id,
-      sizeSku: size.skuCode,
-      quantity: qtyVacpac,
-      updatedAt: serverTimestamp(),
-    });
-
-    batchSize += 2;
-    itemsSeeded++;
-
-    // Committing in batches
-    if (batchSize >= 400) {
-      await batch.commit();
-      batch = writeBatch(db);
-      batchSize = 0;
-      if (onProgress) {
-        onProgress(itemsSeeded);
-      }
-    }
-  }
-
-  if (batchSize > 0) {
-    await batch.commit();
-    if (onProgress) {
-      onProgress(itemsSeeded);
-    }
-  }
-}
-
-// Purges ALL inventory items from the database
-export async function clearInventoryCollection() {
-// 🎯 ALIGN THIS WORD EXACTLY TO YOUR REAL CLOUD FOLDER NAME:
-const qSnap = await getDocs(collection(db, 'inventory'));
-
-  if (qSnap.empty) return;
-
-  let batch = writeBatch(db);
-  let batchSize = 0;
-
-  for (const docSnap of qSnap.docs) {
-    batch.delete(docSnap.ref);
-    batchSize++;
-    if (batchSize >= 450) {
-      await batch.commit();
-      batch = writeBatch(db);
-      batchSize = 0;
-    }
-  }
-
-  if (batchSize > 0) {
     await batch.commit();
   }
-}
+
+  console.log("🏁 DATA INJECTION REFRESH COMPLETE.");
+};

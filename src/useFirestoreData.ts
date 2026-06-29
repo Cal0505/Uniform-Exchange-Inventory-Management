@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
-import { seedDatabaseIfEmpty } from './seeder';
 import { School, ClothingType, Size, Colour, Location, InventoryItem, Category, ItemType } from './types';
 
 export function useFirestoreData() {

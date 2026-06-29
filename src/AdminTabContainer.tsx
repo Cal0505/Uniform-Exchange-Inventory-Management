@@ -73,7 +73,7 @@ export default function AdminTabContainer({
           categories={categories || []}
           schoolTypes={schoolTypes || []}
           userRole={userRole}
-          forcedSubTabOverride={activeView}
+          forcedSubTabOverride={activeView as any}
         />
       )}
     </div>
