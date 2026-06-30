@@ -11,6 +11,7 @@ import HomeLanding from './components/HomeLanding';
 import AdminTabContainer from './AdminTabContainer'; 
 import StatsDashboard from './components/StatsDashboard';
 import { useFirestoreData } from './useFirestoreData'; 
+import IntakeForm from './components/IntakeForm';
 import { Layers, Settings, RefreshCw, Clock, Shirt, User, LogOut, ChevronDown, UserCheck, BarChart3, UserCircle } from 'lucide-react';
 
 interface AdvancedSchool {
@@ -137,29 +138,31 @@ export default function App() {
     id: a.id, name: a.name, label: a.label, skuCode: a.skuCode || '', ruleProfile: a.ruleProfile
   }));
 
-  return (
-    <div className="min-h-screen bg-[#F8F9FA] flex flex-col xl:flex-row font-sans antialiased text-[#54595F] w-full">
-      
-      {/* 🧭 NAVIGATION SIDEBAR DRAWER CONTROLLER */}
-      <NavBar 
-        categories={dataPool.categories || []}
-        activeMainTab={activeMainTab}
-        setActiveMainTab={setActiveMainTab}
-        activeSubTab={activeSubTab}
-        setActiveSubTab={setActiveSubTab}
-        currentViewedCategory={currentViewedCategory}
-        setCurrentViewedCategory={setCurrentViewedCategory}
-        userRole={userRole}
-        loggedInEmail={loggedInEmail}
-        handleSignOut={handleSignOut}
-        isFirebaseConnected={isFirebaseConnected}
-        loading={!!dataPool.loading}
-      />
+return (
+  <div className="min-h-screen bg-[#F8F9FA] flex flex-col xl:flex-row font-sans antialiased text-[#54595F] w-full">
+    
+    {/* 🧭 NAVIGATION SIDEBAR */}
+    <NavBar 
+      categories={dataPool.categories || []}
+      activeMainTab={activeMainTab}
+      setActiveMainTab={setActiveMainTab}
+      activeSubTab={activeSubTab}
+      setActiveSubTab={setActiveSubTab}
+      currentViewedCategory={currentViewedCategory}
+      setCurrentViewedCategory={setCurrentViewedCategory}
+      userRole={userRole}
+      loggedInEmail={loggedInEmail}
+      handleSignOut={handleSignOut}
+      isFirebaseConnected={isFirebaseConnected}
+      loading={!!dataPool.loading}
+    />
 
-      {/* 💻 MAIN OPERATIONS CANVAS REGISTRY GRID */}
-      <main className="flex-1 p-4 md:p-8 xl:pl-72 overflow-x-hidden w-full">
+    {/* 💻 MAIN OPERATIONS CANVAS */}
+<main className="flex-1 w-full min-h-screen pt-4 pb-8 md:p-8 xl:pl-80 overflow-x-hidden">
+  <div className="max-w-7xl mx-auto w-full">
         
-        {/* 👋 WELCOME DASHBOARD COMMAND CENTER LANDING VIEW */}
+        {/* --- ALL YOUR VIEWS GO INSIDE THIS DIV --- */}
+
         {activeMainTab === null && (
           <HomeLanding 
             categories={dataPool.categories || []}
@@ -171,7 +174,7 @@ export default function App() {
             tasksList={tasksList}
           />
         )}
-        {/* INVENTORY VIEWS ROUTER */}
+
         {activeMainTab === 'inventory_view' && (
           <Inventory 
             currentViewedCategory={currentViewedCategory}
@@ -185,7 +188,6 @@ export default function App() {
           />
         )}
 
-        {/* ⚙️ DYNAMIC DATA SHEETS ROUTER FOR THE MANAGEMENT DRILLDOWN */}
         {activeMainTab === 'management_view' && (
           <Management 
             schools={mappedSchools} 
@@ -200,7 +202,6 @@ export default function App() {
           />
         )}
 
-        {/* 👥 REAL-TIME CLOUD ACCESS CONTROL ROUTER HOOK */}
         {activeMainTab === 'staff' && (
           <AdminTabContainer 
             schools={mappedSchools as any} 
@@ -216,7 +217,6 @@ export default function App() {
           />
         )}
 
-        {/* ADMIN TASKS TELEMETRY RENDER CELLS */}
         {activeMainTab === 'dev' && (
           <AdminTabContainer 
             schools={[]} 
@@ -232,8 +232,6 @@ export default function App() {
           />
         )}
 
-        
-        {/* 📊 REAL-TIME LIVE INVENTORY ANALYTICS HUB LOG STATISTICS */}
         {activeMainTab === 'statistics' && (
           <StatsDashboard 
             inventory={dataPool.inventory || []} 
@@ -242,10 +240,12 @@ export default function App() {
           />
         )}
 
-        {/* INDIVIDUAL ACCOUNT DASHBOARD VIEW */}
-        {activeMainTab === 'account' && (<AccountPage userEmail={loggedInEmail} userRole={userRole} />)}
+        {activeMainTab === 'account' && (
+          <AccountPage userEmail={loggedInEmail} userRole={userRole} />
+        )}
+      </div>
+    </main>
+  </div>
+);
 
-      </main>
-    </div>
-  );
 }
