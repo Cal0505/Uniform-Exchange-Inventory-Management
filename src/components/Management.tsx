@@ -28,6 +28,7 @@ export default function ManagementDashboard({
   locations,
   userRole,
   forcedSubTabOverride
+  
 }: ManagementDashboardProps) {
   // Navigation & Form Submission States
   const [activeTab, setActiveTab] = useState<string>('categories');
@@ -511,392 +512,713 @@ export default function ManagementDashboard({
           />
         </div>
 
-        {/* ==========================================
-           📑 PART 6:A: CATEGORIES INLINE FORM CONTENT PANEL
-           ========================================== */}
-        {activeTab === 'categories' && (
-          <div>
-            <form onSubmit={handleAddCategorySubmit} className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
-              <input type="text" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} placeholder="Category Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <input type="text" value={newCatId} onChange={(e) => setNewCatId(e.target.value)} placeholder="Category ID" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <input type="text" value={newCatSkuPrefix} onChange={(e) => setNewCatSkuPrefix(e.target.value)} placeholder="SKU Prefix" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <select value={newCatPackagingType} onChange={(e) => setNewCatPackagingType(e.target.value)} className="text-xs p-2 border border-slate-200 rounded-lg bg-white outline-none focus:border-[#00A896]">
-                <option value="Both">Both</option> <option value="Single">Single</option> <option value="Bulk">Bulk</option>
-              </select>
-              <div className="flex items-center justify-between gap-2">
-                <label className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1">
-                  <input type="checkbox" checked={newCatHasSchools} onChange={(e) => setNewCatHasSchools(e.target.checked)} className="accent-[#00A896]" /> Has Schools
-                </label>
-                <button type="submit" className="bg-[#00A896] text-white px-3 py-1.5 rounded-lg text-xs font-bold">Add</button>
-              </div>
-            </form>
+          {activeTab === 'categories' && (
+            <div className="w-full">
+              {/* ADD FORM - Remains the same */}
+              <form onSubmit={handleAddCategorySubmit} className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <input type="text" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} placeholder="Category Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
+                <input type="text" value={newCatId} onChange={(e) => setNewCatId(e.target.value)} placeholder="Category ID" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
+                <input type="text" value={newCatSkuPrefix} onChange={(e) => setNewCatSkuPrefix(e.target.value)} placeholder="SKU Prefix" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
+                <select value={newCatPackagingType} onChange={(e) => setNewCatPackagingType(e.target.value)} className="text-xs p-2 border border-slate-200 rounded-lg bg-white outline-none focus:border-[#00A896]">
+                  <option value="Both">Both</option> <option value="Single">Single</option> <option value="Bulk">Bulk</option>
+                </select>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1">
+                    <input type="checkbox" checked={newCatHasSchools} onChange={(e) => setNewCatHasSchools(e.target.checked)} className="accent-[#00A896]" /> Has Schools
+                  </label>
+                  <button type="submit" className="bg-[#00A896] text-white px-3 py-1.5 rounded-lg text-xs font-bold">Add</button>
+                </div>
+              </form>
 
-            <table className="w-full text-left border-collapse text-sm">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 uppercase text-[10px] border-b border-slate-200">
-                  <th className="py-2 px-4">Name</th> <th className="py-2 px-4">ID</th> <th className="py-2 px-4 text-[#FF6B35]">SKU Prefix</th> <th className="py-2 px-4">Packaging</th> <th className="py-2 px-4">Schools</th> <th className="py-2 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
+              {/* 🖥️ DESKTOP TABLE (Hidden on Mobile) */}
+              <div className="hidden md:block bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500 uppercase text-[10px] border-b border-slate-200">
+                      <th className="py-2 px-4">Name</th> <th className="py-2 px-4">ID</th> <th className="py-2 px-4 text-[#FF6B35]">SKU</th> <th className="py-2 px-4">Pkg</th> <th className="py-2 px-4">Schools</th> <th className="py-2 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredCategories.map((cat) => {
+                      const currentId = cat.id || cat.docId;
+                      const isRowEditing = editingRowId === currentId;
+                      return (
+                        <tr key={currentId} className={isRowEditing ? "bg-amber-50/40" : ""}>
+                          <td className="py-2 px-4">{isRowEditing ? <input type="text" value={editFormFields.name || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, name: e.target.value }))} className="text-xs p-1 border rounded w-full" /> : <span className="font-semibold text-xs">{cat.name}</span>}</td>
+                          <td className="py-2 px-4 text-slate-600 font-mono text-[10px]">{cat.id}</td>
+                          <td className="py-2 px-4">{isRowEditing ? <input type="text" value={editFormFields.skuPrefix || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuPrefix: e.target.value }))} className="text-xs p-1 border rounded w-16 font-mono uppercase" /> : <span className="font-mono text-[10px] font-bold text-indigo-600">{cat.skuPrefix || '-'}</span>}</td>
+                          <td className="py-2 px-4">{isRowEditing ? <select value={editFormFields.packagingType || 'Both'} onChange={(e) => setEditFormFields(prev => ({ ...prev, packagingType: e.target.value }))} className="text-xs p-1 border rounded bg-white"><option value="Both">Both</option><option value="Single">Single</option><option value="Bulk">Bulk</option></select> : <span className="text-slate-500 text-[10px]">{cat.packagingType || 'Both'}</span>}</td>
+                          <td className="py-2 px-4">{isRowEditing ? <input type="checkbox" checked={editFormFields.hasSchools ?? true} onChange={(e) => setEditFormFields(prev => ({ ...prev, hasSchools: e.target.checked }))} className="accent-[#00A896]" /> : <span className="text-[10px]">{cat.hasSchools ? '✅' : '❌'}</span>}</td>
+                          <td className="py-2 px-4 text-right">
+                            {isRowEditing ? (
+                              <div className="inline-flex gap-2">
+                                <button type="button" onClick={() => handleSecureUpdateRecord('categories', cat, { name: editFormFields.name?.trim(), skuPrefix: editFormFields.skuPrefix?.trim().toUpperCase(), packagingType: editFormFields.packagingType, hasSchools: editFormFields.hasSchools })} className="text-[#00A896]"><Check className="w-4 h-4" /></button>
+                                <button type="button" onClick={cancelInlineEditingRow} className="text-slate-400"><XCircle className="w-4 h-4" /></button>
+                              </div>
+                            ) : (
+                              <div className="inline-flex gap-3">
+                                <button type="button" onClick={() => startInlineEditingRow(cat)} className="text-[#00A896]"><Edit3 className="w-3.5 h-3.5" /></button>
+                                <button type="button" onClick={() => handleSecureDeleteRecord('categories', cat.docId || cat.id, cat.name)} className="text-[#FF6B35]"><Trash2 className="w-4 h-4" /></button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 📱 MOBILE CARD LIST (Hidden on Desktop) */}
+              <div className="md:hidden space-y-3">
                 {filteredCategories.map((cat) => {
                   const currentId = cat.id || cat.docId;
-                  const isRowEditing = editingRowId === currentId;
+                  const isMobileEditing = editingRowId === currentId;
 
                   return (
-                    <tr key={currentId} className={isRowEditing ? "bg-amber-50/40" : ""}>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.name || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, name: e.target.value }))} className="text-xs p-1 border rounded w-full" /> : <span className="font-semibold">{cat.name}</span>}
-                      </td>
-                      <td className="py-2 px-4 text-slate-600 font-mono text-xs">{cat.id}</td>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.skuPrefix || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuPrefix: e.target.value }))} className="text-xs p-1 border rounded w-24 font-mono uppercase" /> : <span className="font-mono text-xs font-bold text-indigo-600">{cat.skuPrefix || '-'}</span>}
-                      </td>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? (
-                          <select value={editFormFields.packagingType || 'Both'} onChange={(e) => setEditFormFields(prev => ({ ...prev, packagingType: e.target.value }))} className="text-xs p-1 border rounded bg-white">
-                            <option value="Both">Both</option> <option value="Single">Single</option> <option value="Bulk">Bulk</option>
-                          </select>
-                        ) : <span className="text-slate-500 text-xs">{cat.packagingType || 'Both'}</span>}
-                      </td>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? <input type="checkbox" checked={editFormFields.hasSchools ?? true} onChange={(e) => setEditFormFields(prev => ({ ...prev, hasSchools: e.target.checked }))} className="accent-[#00A896]" /> : <span>{cat.hasSchools ? '✅ True' : '❌ False'}</span>}
-                      </td>
-                      <td className="py-2 px-4 text-right">
-                        {isRowEditing ? (
-                          <div className="inline-flex gap-2">
-                            <button type="button" onClick={() => handleSecureUpdateRecord('categories', cat, { name: editFormFields.name?.trim(), skuPrefix: editFormFields.skuPrefix?.trim().toUpperCase(), packagingType: editFormFields.packagingType, hasSchools: editFormFields.hasSchools })} className="p-1 bg-[#00A896] text-white rounded hover:bg-[#008f80]"><Check className="w-3.5 h-3.5" /></button>
-                            <button type="button" onClick={cancelInlineEditingRow} className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"><XCircle className="w-3.5 h-3.5" /></button>
+                    <div key={currentId} className={`p-4 rounded-2xl border shadow-sm flex flex-col gap-3 ${isMobileEditing ? "bg-amber-50/40 border-amber-300" : "bg-white border-slate-200"}`}>
+                      
+                      <div className="w-full space-y-2">
+                        {isMobileEditing ? (
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Category Name</label>
+                              <input type="text" value={editFormFields.name || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, name: e.target.value }))} className="text-xs p-1.5 border rounded w-full bg-white" />
+                            </div>
+                            <div>
+                              <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">SKU Prefix</label>
+                              <input type="text" value={editFormFields.skuPrefix || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuPrefix: e.target.value }))} className="text-xs p-1.5 border rounded w-full font-mono uppercase bg-white" />
+                            </div>
+                            <div>
+                              <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Packaging</label>
+                              <select value={editFormFields.packagingType || 'Both'} onChange={(e) => setEditFormFields(prev => ({ ...prev, packagingType: e.target.value }))} className="text-xs p-1.5 border rounded w-full bg-white">
+                                <option value="Both">Both</option>
+                                <option value="Single">Single</option>
+                                <option value="Bulk">Bulk</option>
+                              </select>
+                            </div>
+                            <div className="flex items-center gap-2 mt-2">
+                              <input type="checkbox" checked={editFormFields.hasSchools ?? true} onChange={(e) => setEditFormFields(prev => ({ ...prev, hasSchools: e.target.checked }))} className="accent-[#00A896] w-4 h-4" />
+                              <label className="text-xs font-bold text-slate-600">Has Schools</label>
+                            </div>
                           </div>
                         ) : (
-                          <div className="inline-flex gap-3">
-                            <button type="button" onClick={() => startInlineEditingRow(cat)} className="text-[#00A896]"><Edit3 className="w-3.5 h-3.5" /></button>
-                            <button type="button" onClick={() => handleSecureDeleteRecord('categories', cat.docId || cat.id, cat.name)} className="text-[#FF6B35]"><Trash2 className="w-4 h-4" /></button>
+                          <div>
+                            <div className="font-bold text-sm text-slate-900">{cat.name}</div>
+                            <div className="text-[10px] text-slate-500 mt-1">ID: {cat.id} | SKU: <span className="font-mono text-indigo-600 font-bold">{cat.skuPrefix || '-'}</span></div>
+                            <div className="text-[10px] font-bold mt-1 text-slate-700">{cat.packagingType} | {cat.hasSchools ? '✅ Has Schools' : '❌ No Schools'}</div>
                           </div>
                         )}
-                      </td>
-                    </tr>
+                      </div>
+                      
+                      {/* ACTION BUTTONS Container */}
+                      <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
+                        {isMobileEditing ? (
+                          <div className="inline-flex gap-2">
+                            <button type="button" onClick={() => handleSecureUpdateRecord('categories', cat, { name: editFormFields.name?.trim(), skuPrefix: editFormFields.skuPrefix?.trim().toUpperCase(), packagingType: editFormFields.packagingType, hasSchools: editFormFields.hasSchools })} className="p-2 bg-[#00A896] text-white rounded-lg"><Check className="w-4 h-4" /></button>
+                            <button type="button" onClick={cancelInlineEditingRow} className="p-2 bg-slate-200 text-slate-600 rounded-lg"><XCircle className="w-4 h-4" /></button>
+                          </div>
+                        ) : (
+                          <div className="inline-flex gap-2">
+                            <button type="button" onClick={() => startInlineEditingRow(cat)} className="text-[#00A896] p-2 bg-emerald-50 rounded-lg hover:bg-emerald-100"><Edit3 className="w-4 h-4" /></button>
+                            <button type="button" onClick={() => handleSecureDeleteRecord('categories', cat.docId || cat.id, cat.name)} className="text-[#FF6B35] p-2 bg-red-50 rounded-lg hover:bg-red-100"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-        )}
+              </div>
+            </div>
+          )}
 
-        {/* ==========================================
-           📑 PART 6:B: SIZES INLINE FORM CONTENT PANEL
-           ========================================== */}
-        {activeTab === 'sizes' && (
-          <div>
-            <form onSubmit={handleAddSizeSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
-              <input type="text" value={newSizeName} onChange={(e) => setNewSizeName(e.target.value)} placeholder="Size Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <input type="text" value={newSizeLabel} onChange={(e) => setNewSizeLabel(e.target.value)} placeholder="Label" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <input type="text" value={newSizeSkuCode} onChange={(e) => setNewSizeSkuCode(e.target.value)} placeholder="SKU Code" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <button type="submit" className="bg-[#00A896] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm">Save New Size</button>
-            </form>
+          {activeTab === 'sizes' && (
+            <div className="w-full">
+              {/* ADD FORM */}
+              <form onSubmit={handleAddSizeSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <input type="text" value={newSizeName} onChange={(e) => setNewSizeName(e.target.value)} placeholder="Size Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
+                <input type="text" value={newSizeLabel} onChange={(e) => setNewSizeLabel(e.target.value)} placeholder="Label" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
+                <input type="text" value={newSizeSkuCode} onChange={(e) => setNewSizeSkuCode(e.target.value)} placeholder="SKU Code" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
+                <button type="submit" className="bg-[#00A896] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm">Save New Size</button>
+              </form>
 
-            <table className="w-full text-left border-collapse text-sm">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 uppercase text-[10px] border-b border-slate-200">
-                  <th className="py-2 px-4">Name</th> <th className="py-2 px-4">Label</th> <th className="py-2 px-4 text-[#FF6B35]">SKU Code</th> <th className="py-2 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
+              {/* 🖥️ DESKTOP TABLE */}
+              <div className="hidden md:block bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500 uppercase text-[10px] border-b border-slate-200">
+                      <th className="py-2 px-4">Name</th> <th className="py-2 px-4">Label</th> <th className="py-2 px-4 text-[#FF6B35]">SKU</th> <th className="py-2 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredSizes.map((sz) => {
+                      const currentId = sz.id || sz.docId;
+                      const isRowEditing = editingRowId === currentId;
+                      return (
+                        <tr key={currentId} className={isRowEditing ? "bg-amber-50/40" : ""}>
+                          <td className="py-2 px-4">{isRowEditing ? <input type="text" value={editFormFields.name || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, name: e.target.value }))} className="text-xs p-1 border rounded w-full" /> : <span className="font-semibold">{sz.name}</span>}</td>
+                          <td className="py-2 px-4">{isRowEditing ? <input type="text" value={editFormFields.label || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, label: e.target.value }))} className="text-xs p-1 border rounded w-full" /> : <span className="text-slate-600">{sz.label}</span>}</td>
+                          <td className="py-2 px-4">{isRowEditing ? <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="text-xs p-1 border rounded w-20 font-mono uppercase" /> : <span className="font-mono text-xs font-bold text-indigo-600">{sz.skuCode || 'NONE'}</span>}</td>
+                          <td className="py-2 px-4 text-right">
+                            {isRowEditing ? (
+                              <div className="inline-flex gap-2">
+                                <button type="button" onClick={() => handleSecureUpdateRecord('sizes', sz, { name: editFormFields.name?.trim(), label: editFormFields.label?.trim(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-1 bg-[#00A896] text-white rounded hover:bg-[#008f80]"><Check className="w-3.5 h-3.5" /></button>
+                                <button type="button" onClick={cancelInlineEditingRow} className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"><XCircle className="w-3.5 h-3.5" /></button>
+                              </div>
+                            ) : (
+                              <div className="inline-flex gap-3">
+                                <button type="button" onClick={() => startInlineEditingRow(sz)} className="text-[#00A896]"><Edit3 className="w-3.5 h-3.5" /></button>
+                                <button type="button" onClick={() => handleSecureDeleteRecord('sizes', sz.docId || sz.id, sz.name)} className="text-[#FF6B35]"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 📱 MOBILE CARD LIST (Hidden on Desktop) */}
+              <div className="md:hidden space-y-3">
                 {filteredSizes.map((sz) => {
                   const currentId = sz.id || sz.docId;
-                  const isRowEditing = editingRowId === currentId;
+                  const isMobileEditing = editingRowId === currentId;
 
                   return (
-                    <tr key={currentId} className={isRowEditing ? "bg-amber-50/40" : ""}>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.name || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, name: e.target.value }))} className="text-xs p-1 border rounded w-full" /> : <span className="font-semibold">{sz.name}</span>}
-                      </td>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.label || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, label: e.target.value }))} className="text-xs p-1 border rounded w-full" /> : <span className="text-slate-600">{sz.label}</span>}
-                      </td>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="text-xs p-1 border rounded w-32 font-mono uppercase" /> : <span className="font-mono text-xs font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded inline-block">{sz.skuCode || 'NONE'}</span>}
-                      </td>
-                      <td className="py-2 px-4 text-right">
-                        {isRowEditing ? (
-                          <div className="inline-flex gap-2">
-                            <button type="button" onClick={() => handleSecureUpdateRecord('sizes', sz, { name: editFormFields.name?.trim(), label: editFormFields.label?.trim(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-1 bg-[#00A896] text-white rounded hover:bg-[#008f80]"><Check className="w-3.5 h-3.5" /></button>
-                            <button type="button" onClick={cancelInlineEditingRow} className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"><XCircle className="w-3.5 h-3.5" /></button>
+                    <div key={currentId} className={`p-4 rounded-2xl border shadow-sm flex flex-col gap-3 ${isMobileEditing ? "bg-amber-50/40 border-amber-300" : "bg-white border-slate-200"}`}>
+                      
+                      {/* CARD CONTENT / INPUT FIELDS SWITCH */}
+                      <div className="w-full space-y-2">
+                        {isMobileEditing ? (
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Size Name</label>
+                              <input type="text" value={editFormFields.name || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, name: e.target.value }))} className="text-xs p-1.5 border rounded w-full bg-white" />
+                            </div>
+                            <div>
+                              <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Label</label>
+                              <input type="text" value={editFormFields.label || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, label: e.target.value }))} className="text-xs p-1.5 border rounded w-full bg-white" />
+                            </div>
+                            <div>
+                              <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">SKU Code</label>
+                              <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="text-xs p-1.5 border rounded w-full font-mono uppercase bg-white" />
+                            </div>
                           </div>
                         ) : (
-                          <div className="inline-flex gap-3">
-                            <button type="button" onClick={() => startInlineEditingRow(sz)} className="text-[#00A896]"><Edit3 className="w-3.5 h-3.5" /></button>
-                            <button type="button" onClick={() => handleSecureDeleteRecord('sizes', sz.docId || sz.id, sz.name)} className="text-[#FF6B35]"><Trash2 className="w-3.5 h-3.5" /></button>
+                          <div>
+                            <div className="font-bold text-sm text-slate-900">{sz.name}</div>
+                            <div className="text-[10px] text-slate-500 mt-1">Label: {sz.label} | SKU: <span className="font-mono text-indigo-600 font-bold">{sz.skuCode || 'NONE'}</span></div>
                           </div>
                         )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {/* ==========================================
-           📑 PART 7:A: SUB-LISTS RENDER SHEET (SCHOOLS)
-           ========================================== */}
-        {activeTab === 'schoolTypes' && (
-          <div>
-            <form onSubmit={handleAddSchoolTypeSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
-              <input type="text" value={newSchoolTypeName} onChange={(e) => setNewSchoolTypeName(e.target.value)} placeholder="School Type Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <input type="text" value={newSchoolTypeSkuCode} onChange={(e) => setNewSchoolTypeSkuCode(e.target.value)} placeholder="SKU Code" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <button type="submit" className="bg-[#00A896] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm">Add Type</button>
-            </form>
-            <table className="w-full text-left border-collapse text-sm">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 uppercase text-[10px] border-b border-slate-200">
-                  <th className="py-2 px-4">Name</th> <th className="py-2 px-4 text-[#FF6B35]">SKU Code</th> <th className="py-2 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredSchoolTypes.map((st) => {
-                  const currentId = st.id || st.docId;
-                  const isRowEditing = editingRowId === currentId;
-
-                  return (
-                    <tr key={currentId} className={isRowEditing ? "bg-amber-50/40" : ""}>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.name || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, name: e.target.value }))} className="text-xs p-1 border rounded w-full" /> : <span className="font-semibold">{st.name}</span>}
-                      </td>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="text-xs p-1 border rounded w-32 font-mono uppercase" /> : <span className="font-mono text-xs font-bold text-indigo-600">{st.skuCode || '-'}</span>}
-                      </td>
-                      <td className="py-2 px-4 text-right">
-                        {isRowEditing ? (
+                      </div>
+                      
+                      {/* ACTION BUTTONS Container */}
+                      <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
+                        {isMobileEditing ? (
                           <div className="inline-flex gap-2">
-                            <button type="button" onClick={() => handleSecureUpdateRecord('schoolTypes', st, { name: editFormFields.name?.trim(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-1 bg-[#00A896] text-white rounded hover:bg-[#008f80]"><Check className="w-3.5 h-3.5" /></button>
-                            <button type="button" onClick={cancelInlineEditingRow} className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"><XCircle className="w-3.5 h-3.5" /></button>
+                            <button type="button" onClick={() => handleSecureUpdateRecord('sizes', sz, { name: editFormFields.name?.trim(), label: editFormFields.label?.trim(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-2 bg-[#00A896] text-white rounded-lg"><Check className="w-4 h-4" /></button>
+                            <button type="button" onClick={cancelInlineEditingRow} className="p-2 bg-slate-200 text-slate-600 rounded-lg"><XCircle className="w-4 h-4" /></button>
                           </div>
                         ) : (
-                          <div className="inline-flex gap-3">
-                            <button type="button" onClick={() => startInlineEditingRow(st)} className="text-[#00A896]"><Edit3 className="w-3.5 h-3.5" /></button>
-                            <button type="button" onClick={() => handleSecureDeleteRecord('schoolTypes', st.docId || st.id, st.name)} className="text-[#FF6B35]"><Trash2 className="w-4 h-4" /></button>
+                          <div className="inline-flex gap-2">
+                            <button type="button" onClick={() => startInlineEditingRow(sz)} className="text-[#00A896] p-2 bg-emerald-50 rounded-lg hover:bg-emerald-100"><Edit3 className="w-4 h-4" /></button>
+                            <button type="button" onClick={() => handleSecureDeleteRecord('sizes', sz.docId || sz.id, sz.name)} className="text-[#FF6B35] p-2 bg-red-50 rounded-lg hover:bg-red-100"><Trash2 className="w-4 h-4" /></button>
                           </div>
                         )}
-                      </td>
-                    </tr>
+                      </div>
+
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-        )}
+              </div>
+            </div>
+          )}
 
-        {activeTab === 'schools' && (
-          <div>
-            <form onSubmit={handleAddSchoolSubmit} className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
-              <input type="text" value={newSchoolName} onChange={(e) => setNewSchoolName(e.target.value)} placeholder="School Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <input type="text" value={newSchoolIdCode} onChange={(e) => setNewSchoolIdCode(e.target.value)} placeholder="ID Code" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <input type="text" value={newSchoolType} onChange={(e) => setNewSchoolType(e.target.value)} placeholder="Type" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <input type="text" value={newSchoolSkuCode} onChange={(e) => setNewSchoolSkuCode(e.target.value)} placeholder="SKU Code" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <button type="submit" className="bg-[#00A896] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm">Register</button>
-            </form>
-            <table className="w-full text-left border-collapse text-sm">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 uppercase text-[10px] border-b border-slate-200">
-                  <th className="py-2 px-4">Name</th> <th className="py-2 px-4">ID Code</th> <th className="py-2 px-4">School Type</th> <th className="py-2 px-4 text-[#FF6B35]">SKU Code</th> <th className="py-2 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
+          {activeTab === 'schoolTypes' && (
+            <div>
+              <form onSubmit={handleAddSchoolTypeSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <input type="text" value={newSchoolTypeName} onChange={(e) => setNewSchoolTypeName(e.target.value)} placeholder="School Type Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
+                <input type="text" value={newSchoolTypeSkuCode} onChange={(e) => setNewSchoolTypeSkuCode(e.target.value)} placeholder="SKU Code" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
+                <button type="submit" className="bg-[#00A896] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm">Add Type</button>
+              </form>
+              <table className="w-full text-left border-collapse text-sm">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-500 uppercase text-[10px] border-b border-slate-200">
+                    <th className="py-2 px-4">Name</th> <th className="py-2 px-4 text-[#FF6B35]">SKU Code</th> <th className="py-2 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredSchoolTypes.map((st) => {
+                    const currentId = st.id || st.docId;
+                    const isRowEditing = editingRowId === currentId;
+
+                    return (
+                      <tr key={currentId} className={isRowEditing ? "bg-amber-50/40" : ""}>
+                        <td className="py-2 px-4">
+                          {isRowEditing ? <input type="text" value={editFormFields.name || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, name: e.target.value }))} className="text-xs p-1 border rounded w-full" /> : <span className="font-semibold">{st.name}</span>}
+                        </td>
+                        <td className="py-2 px-4">
+                          {isRowEditing ? <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="text-xs p-1 border rounded w-32 font-mono uppercase" /> : <span className="font-mono text-xs font-bold text-indigo-600">{st.skuCode || '-'}</span>}
+                        </td>
+                        <td className="py-2 px-4 text-right">
+                          {isRowEditing ? (
+                            <div className="inline-flex gap-2">
+                              <button type="button" onClick={() => handleSecureUpdateRecord('schoolTypes', st, { name: editFormFields.name?.trim(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-1 bg-[#00A896] text-white rounded hover:bg-[#008f80]"><Check className="w-3.5 h-3.5" /></button>
+                              <button type="button" onClick={cancelInlineEditingRow} className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"><XCircle className="w-3.5 h-3.5" /></button>
+                            </div>
+                          ) : (
+                            <div className="inline-flex gap-3">
+                              <button type="button" onClick={() => startInlineEditingRow(st)} className="text-[#00A896]"><Edit3 className="w-3.5 h-3.5" /></button>
+                              <button type="button" onClick={() => handleSecureDeleteRecord('schoolTypes', st.docId || st.id, st.name)} className="text-[#FF6B35]"><Trash2 className="w-4 h-4" /></button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {activeTab === 'schools' && (
+            <div className="bg-white border border-slate-200 rounded-3xl shadow-xs overflow-hidden w-full">
+              {/* 🖥️ PC TABLE HEADER (Hidden on mobile) */}
+              <div className="hidden md:grid grid-cols-5 gap-4 p-4 bg-slate-50 font-black text-slate-500 uppercase text-[10px] border-b">
+                <div>Name</div>
+                <div>ID Code</div>
+                <div>Type</div>
+                <div className="text-[#FF6B35]">SKU Code</div>
+                <div className="text-right">Actions</div>
+              </div>
+
+              <div className="divide-y divide-slate-100">
                 {filteredSchools.map((sch) => {
                   const currentId = sch.id || sch.docId;
                   const isRowEditing = editingRowId === currentId;
 
                   return (
-                    <tr key={currentId} className={isRowEditing ? "bg-amber-50/40" : ""}>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.name || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, name: e.target.value }))} className="text-xs p-1 border rounded w-full" /> : <span className="font-semibold">{sch.name}</span>}
-                      </td>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.schoolIdCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, schoolIdCode: e.target.value }))} className="text-xs p-1 border rounded w-full font-mono uppercase" /> : <span className="font-mono text-xs">{sch.schoolIdCode || '-'}</span>}
-                      </td>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.schoolType || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, schoolType: e.target.value }))} className="text-xs p-1 border rounded w-full uppercase" /> : <span className="text-xs">{sch.schoolType || '-'}</span>}
-                      </td>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="text-xs p-1 border rounded w-full font-mono uppercase" /> : <span className="font-mono text-xs font-bold text-indigo-600">{sch.skuCode || '-'}</span>}
-                      </td>
-                      <td className="py-2 px-4 text-right">
-                        {isRowEditing ? (
-                          <div className="inline-flex gap-2">
-                            <button type="button" onClick={() => handleSecureUpdateRecord('schools', sch, { name: editFormFields.name?.trim(), schoolIdCode: editFormFields.schoolIdCode?.trim().toUpperCase(), schoolType: editFormFields.schoolType?.trim().toUpperCase(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-1 bg-[#00A896] text-white rounded hover:bg-[#008f80]"><Check className="w-3.5 h-3.5" /></button>
-                            <button type="button" onClick={cancelInlineEditingRow} className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"><XCircle className="w-3.5 h-3.5" /></button>
-                          </div>
-                        ) : (
-                          <div className="inline-flex gap-3">
-                            <button type="button" onClick={() => startInlineEditingRow(sch)} className="text-[#00A896]"><Edit3 className="w-3.5 h-3.5" /></button>
-                            <button type="button" onClick={() => handleSecureDeleteRecord('schools', sch.docId || sch.id, sch.name)} className="text-[#FF6B35]"><Trash2 className="w-4 h-4" /></button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
+                    <div key={currentId} className={isRowEditing ? "bg-amber-50/40" : ""}>
+                      
+                      {/* 🖥️ PC ROW (Hidden on mobile) */}
+                      <div className="hidden md:grid grid-cols-5 gap-4 p-4 items-center text-xs text-slate-700">
+                        <div>
+                          {isRowEditing ? (
+                            <input type="text" value={editFormFields.name || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, name: e.target.value }))} className="text-xs p-1 border rounded w-full bg-white" />
+                          ) : (
+                            <span className="font-semibold">{sch.name}</span>
+                          )}
+                        </div>
+                        <div>
+                          {isRowEditing ? (
+                            <input type="text" value={editFormFields.schoolIdCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, schoolIdCode: e.target.value }))} className="text-xs p-1 border rounded w-full font-mono uppercase bg-white" />
+                          ) : (
+                            <span className="font-mono">{sch.schoolIdCode || '-'}</span>
+                          )}
+                        </div>
+                        <div>
+                          {isRowEditing ? (
+                            <input type="text" value={editFormFields.schoolType || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, schoolType: e.target.value }))} className="text-xs p-1 border rounded w-full uppercase bg-white" />
+                          ) : (
+                            <span>{sch.schoolType || '-'}</span>
+                          )}
+                        </div>
+                        <div>
+                          {isRowEditing ? (
+                            <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="text-xs p-1 border rounded w-full font-mono uppercase bg-white" />
+                          ) : (
+                            <span className="font-mono font-bold text-indigo-600">{sch.skuCode || '-'}</span>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          {isRowEditing ? (
+                            <div className="inline-flex gap-2 justify-end">
+                              <button type="button" onClick={() => handleSecureUpdateRecord('schools', sch, { name: editFormFields.name?.trim(), schoolIdCode: editFormFields.schoolIdCode?.trim().toUpperCase(), schoolType: editFormFields.schoolType?.trim().toUpperCase(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-1 bg-[#00A896] text-white rounded hover:bg-[#008f80]"><Check className="w-3.5 h-3.5" /></button>
+                              <button type="button" onClick={cancelInlineEditingRow} className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"><XCircle className="w-3.5 h-3.5" /></button>
+                            </div>
+                          ) : (
+                            <div className="inline-flex gap-3 justify-end">
+                              <button type="button" onClick={() => startInlineEditingRow(sch)} className="text-[#00A896]"><Edit3 className="w-3.5 h-3.5" /></button>
+                              <button type="button" onClick={() => handleSecureDeleteRecord('schools', sch.docId || sch.id, sch.name)} className="text-[#FF6B35]"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 📱 MOBILE CARD (Visible only on mobile) */}
+                      <div className="md:hidden p-4 flex flex-col gap-3">
+                        <div className="w-full space-y-2">
+                          {isRowEditing ? (
+                            <div className="space-y-3">
+                              <div>
+                                <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">School Name</label>
+                                <input type="text" value={editFormFields.name || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, name: e.target.value }))} className="text-xs p-1.5 border rounded w-full bg-white" />
+                              </div>
+                              <div>
+                                <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">ID Code</label>
+                                <input type="text" value={editFormFields.schoolIdCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, schoolIdCode: e.target.value }))} className="text-xs p-1.5 border rounded w-full font-mono uppercase bg-white" />
+                              </div>
+                              <div>
+                                <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">School Type</label>
+                                <input type="text" value={editFormFields.schoolType || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, schoolType: e.target.value }))} className="text-xs p-1.5 border rounded w-full uppercase bg-white" />
+                              </div>
+                              <div>
+                                <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">SKU Code</label>
+                                <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="text-xs p-1.5 border rounded w-full font-mono uppercase bg-white" />
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <div className="font-bold text-sm text-slate-900">{sch.name}</div>
+                              <div className="text-[11px] text-slate-500 mt-1">ID: {sch.schoolIdCode || '-'} | Type: {sch.schoolType || '-'}</div>
+                              <div className="text-[10px] font-mono text-indigo-600 mt-2">SKU: {sch.skuCode || '-'}</div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* ACTION BUTTONS Container */}
+                        <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
+                          {isRowEditing ? (
+                            <div className="inline-flex gap-2">
+                              <button type="button" onClick={() => handleSecureUpdateRecord('schools', sch, { name: editFormFields.name?.trim(), schoolIdCode: editFormFields.schoolIdCode?.trim().toUpperCase(), schoolType: editFormFields.schoolType?.trim().toUpperCase(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-2 bg-[#00A896] text-white rounded-lg"><Check className="w-4 h-4" /></button>
+                              <button type="button" onClick={cancelInlineEditingRow} className="p-2 bg-slate-200 text-slate-600 rounded-lg"><XCircle className="w-4 h-4" /></button>
+                            </div>
+                          ) : (
+                            <div className="inline-flex gap-2">
+                              <button type="button" onClick={() => startInlineEditingRow(sch)} className="text-[#00A896] p-2 bg-emerald-50 rounded-lg hover:bg-emerald-100"><Edit3 className="w-4 h-4" /></button>
+                              <button type="button" onClick={() => handleSecureDeleteRecord('schools', sch.docId || sch.id, sch.name)} className="text-[#FF6B35] p-2 bg-red-50 rounded-lg hover:bg-red-100"><Trash2 className="w-4 h-4" /></button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-        )}
+              </div>
+            </div>
+          )}
 
-        {/* ==========================================
-           📑 PART 7:B: SUB-LISTS RENDER SHEET (GARMENTS & COLOURS)
-           ========================================== */}
-        {activeTab === 'clothingTypes' && (
-          <div>
-            <form onSubmit={handleAddClothingTypeSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
-              <input type="text" value={newClothingTypeName} onChange={(e) => setNewClothingTypeName(e.target.value)} placeholder="Garment Type Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <input type="text" value={newClothingTypeSkuCode} onChange={(e) => setNewClothingTypeSkuCode(e.target.value)} placeholder="SKU Code" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <button type="submit" className="bg-[#00A896] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm">Add</button>
-            </form>
-            <table className="w-full text-left border-collapse text-sm">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 uppercase text-[10px] border-b border-slate-200">
-                  <th className="py-2 px-4">Name</th> <th className="py-2 px-4 text-[#FF6B35]">SKU Code</th> <th className="py-2 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
+          {activeTab === 'clothingTypes' && (
+            <div className="w-full">
+              {/* ADD FORM */}
+              <form onSubmit={handleAddClothingTypeSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <input type="text" value={newClothingTypeName} onChange={(e) => setNewClothingTypeName(e.target.value)} placeholder="Clothing Type Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
+                <input type="text" value={newClothingTypeSkuCode} onChange={(e) => setNewClothingTypeSkuCode(e.target.value)} placeholder="SKU Code" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
+                <button type="submit" className="bg-[#00A896] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm">Add Clothing Type</button>
+              </form>
+
+              {/* 🖥️ DESKTOP TABLE (Hidden on Mobile) */}
+              <div className="hidden md:block bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500 uppercase text-[10px] border-b border-slate-200">
+                      <th className="py-2 px-4">Name</th> <th className="py-2 px-4 text-[#FF6B35]">SKU Code</th> <th className="py-2 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredClothingTypes.map((ct) => {
+                      const currentId = ct.id || ct.docId;
+                      const isRowEditing = editingRowId === currentId;
+
+                      return (
+                        <tr key={currentId} className={isRowEditing ? "bg-amber-50/40" : ""}>
+                          <td className="py-2 px-4">
+                            {isRowEditing ? <input type="text" value={editFormFields.name || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, name: e.target.value }))} className="text-xs p-1 border rounded w-full bg-white" /> : <span className="font-semibold">{ct.name}</span>}
+                          </td>
+                          <td className="py-2 px-4">
+                            {isRowEditing ? <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="text-xs p-1 border rounded w-32 font-mono uppercase bg-white" /> : <span className="font-mono text-xs font-bold text-indigo-600">{ct.skuCode || '-'}</span>}
+                          </td>
+                          <td className="py-2 px-4 text-right">
+                            {isRowEditing ? (
+                              <div className="inline-flex gap-2">
+                                <button type="button" onClick={() => handleSecureUpdateRecord('clothingTypes', ct, { name: editFormFields.name?.trim(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-1 bg-[#00A896] text-white rounded hover:bg-[#008f80]"><Check className="w-3.5 h-3.5" /></button>
+                                <button type="button" onClick={cancelInlineEditingRow} className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"><XCircle className="w-3.5 h-3.5" /></button>
+                              </div>
+                            ) : (
+                              <div className="inline-flex gap-3">
+                                <button type="button" onClick={() => startInlineEditingRow(ct)} className="text-[#00A896]"><Edit3 className="w-3.5 h-3.5" /></button>
+                                <button type="button" onClick={() => handleSecureDeleteRecord('clothingTypes', ct.docId || ct.id, ct.name)} className="text-[#FF6B35]"><Trash2 className="w-4 h-4" /></button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 📱 MOBILE CARD LIST (Hidden on Desktop) */}
+              <div className="md:hidden space-y-3">
                 {filteredClothingTypes.map((ct) => {
                   const currentId = ct.id || ct.docId;
-                  const isRowEditing = editingRowId === currentId;
+                  const isMobileEditing = editingRowId === currentId;
 
                   return (
-                    <tr key={currentId} className={isRowEditing ? "bg-amber-50/40" : ""}>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.name || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, name: e.target.value }))} className="text-xs p-1 border rounded w-full" /> : <span className="font-semibold">{ct.name}</span>}
-                      </td>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="text-xs p-1 border rounded w-32 font-mono uppercase" /> : <span className="font-mono text-xs font-bold text-indigo-600">{ct.skuCode || '-'}</span>}
-                      </td>
-                      <td className="py-2 px-4 text-right">
-                        {isRowEditing ? (
-                          <div className="inline-flex gap-2">
-                            <button type="button" onClick={() => handleSecureUpdateRecord('clothingTypes', ct, { name: editFormFields.name?.trim(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-1 bg-[#00A896] text-white rounded hover:bg-[#008f80]"><Check className="w-3.5 h-3.5" /></button>
-                            <button type="button" onClick={cancelInlineEditingRow} className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"><XCircle className="w-3.5 h-3.5" /></button>
+                    <div key={currentId} className={`p-4 rounded-2xl border shadow-sm flex flex-col gap-3 ${isMobileEditing ? "bg-amber-50/40 border-amber-300" : "bg-white border-slate-200"}`}>
+                      
+                      {/* CARD CONTENT / INPUT FIELDS SWITCH */}
+                      <div className="w-full space-y-2">
+                        {isMobileEditing ? (
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Clothing Type Name</label>
+                              <input type="text" value={editFormFields.name || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, name: e.target.value }))} className="text-xs p-1.5 border rounded w-full bg-white" />
+                            </div>
+                            <div>
+                              <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">SKU Code</label>
+                              <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="text-xs p-1.5 border rounded w-full font-mono uppercase bg-white" />
+                            </div>
                           </div>
                         ) : (
-                          <div className="inline-flex gap-3">
-                            <button type="button" onClick={() => startInlineEditingRow(ct)} className="text-[#00A896]"><Edit3 className="w-3.5 h-3.5" /></button>
-                            <button type="button" onClick={() => handleSecureDeleteRecord('clothingTypes', ct.docId || ct.id, ct.name)} className="text-[#FF6B35]"><Trash2 className="w-4 h-4" /></button>
+                          <div>
+                            <div className="font-bold text-sm text-slate-900">{ct.name}</div>
+                            <div className="text-[10px] text-slate-500 mt-1">SKU: <span className="font-mono text-indigo-600 font-bold">{ct.skuCode || '-'}</span></div>
                           </div>
                         )}
-                      </td>
-                    </tr>
+                      </div>
+                      
+                      {/* ACTION BUTTONS Container */}
+                      <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
+                        {isMobileEditing ? (
+                          <div className="inline-flex gap-2">
+                            <button type="button" onClick={() => handleSecureUpdateRecord('clothingTypes', ct, { name: editFormFields.name?.trim(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-2 bg-[#00A896] text-white rounded-lg"><Check className="w-4 h-4" /></button>
+                            <button type="button" onClick={cancelInlineEditingRow} className="p-2 bg-slate-200 text-slate-600 rounded-lg"><XCircle className="w-4 h-4" /></button>
+                          </div>
+                        ) : (
+                          <div className="inline-flex gap-2">
+                            <button type="button" onClick={() => startInlineEditingRow(ct)} className="text-[#00A896] p-2 bg-emerald-50 rounded-lg hover:bg-emerald-100"><Edit3 className="w-4 h-4" /></button>
+                            <button type="button" onClick={() => handleSecureDeleteRecord('clothingTypes', ct.docId || ct.id, ct.name)} className="text-[#FF6B35] p-2 bg-red-50 rounded-lg hover:bg-red-100"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-        )}
+              </div>
+            </div>
+          )}
 
-        {activeTab === 'colours' && (
-          <div>
-            <form onSubmit={handleAddColourSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
-              <input type="text" value={newColourName} onChange={(e) => setNewColourName(e.target.value)} placeholder="Colour Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <input type="text" value={newColourLabel} onChange={(e) => setNewColourLabel(e.target.value)} placeholder="Label" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <input type="text" value={newColourSkuCode} onChange={(e) => setNewColourSkuCode(e.target.value)} placeholder="SKU Code" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <button type="submit" className="bg-[#00A896] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm">Add</button>
-            </form>
-            <table className="w-full text-left border-collapse text-sm">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 uppercase text-[10px] border-b border-slate-200">
-                  <th className="py-2 px-4">Name</th> <th className="py-2 px-4">Label</th> <th className="py-2 px-4 text-[#FF6B35]">SKU Code</th> <th className="py-2 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredColours.map((col) => {
-                  const currentId = col.id || col.docId;
-                  const isRowEditing = editingRowId === currentId;
+          {activeTab === 'colours' && (
+            <div className="w-full">
+              {/* ADD FORM */}
+              <form onSubmit={handleAddColourSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <input type="text" value={newColourName} onChange={(e) => setNewColourName(e.target.value)} placeholder="Colour Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
+                <input type="text" value={newColourSkuCode} onChange={(e) => setNewColourSkuCode(e.target.value)} placeholder="SKU Code" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
+                <button type="submit" className="bg-[#00A896] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm">Add Colour</button>
+              </form>
+
+              {/* 🖥️ DESKTOP TABLE (Hidden on Mobile) */}
+              <div className="hidden md:block bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500 uppercase text-[10px] border-b border-slate-200">
+                      <th className="py-2 px-4">Name</th> <th className="py-2 px-4 text-[#FF6B35]">SKU Code</th> <th className="py-2 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredColours.map((c) => {
+                      const currentId = c.id || c.docId;
+                      const isRowEditing = editingRowId === currentId;
+
+                      return (
+                        <tr key={currentId} className={isRowEditing ? "bg-amber-50/40" : ""}>
+                          <td className="py-2 px-4">
+                            {isRowEditing ? <input type="text" value={editFormFields.name || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, name: e.target.value }))} className="text-xs p-1 border rounded w-full bg-white" /> : <span className="font-semibold">{c.name}</span>}
+                          </td>
+                          <td className="py-2 px-4">
+                            {isRowEditing ? <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="text-xs p-1 border rounded w-32 font-mono uppercase bg-white" /> : <span className="font-mono text-xs font-bold text-indigo-600">{c.skuCode || '-'}</span>}
+                          </td>
+                          <td className="py-2 px-4 text-right">
+                            {isRowEditing ? (
+                              <div className="inline-flex gap-2">
+                                <button type="button" onClick={() => handleSecureUpdateRecord('colours', c, { name: editFormFields.name?.trim(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-1 bg-[#00A896] text-white rounded hover:bg-[#008f80]"><Check className="w-3.5 h-3.5" /></button>
+                                <button type="button" onClick={cancelInlineEditingRow} className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"><XCircle className="w-3.5 h-3.5" /></button>
+                              </div>
+                            ) : (
+                              <div className="inline-flex gap-3">
+                                <button type="button" onClick={() => startInlineEditingRow(c)} className="text-[#00A896]"><Edit3 className="w-3.5 h-3.5" /></button>
+                                <button type="button" onClick={() => handleSecureDeleteRecord('colours', c.docId || c.id, c.name)} className="text-[#FF6B35]"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 📱 MOBILE CARD LIST (Hidden on Desktop) */}
+              <div className="md:hidden space-y-3">
+                {filteredColours.map((c) => {
+                  const currentId = c.id || c.docId;
+                  const isMobileEditing = editingRowId === currentId;
 
                   return (
-                    <tr key={currentId} className={isRowEditing ? "bg-amber-50/40" : ""}>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.name || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, name: e.target.value }))} className="text-xs p-1 border rounded w-full" /> : <span className="font-semibold">{col.name}</span>}
-                      </td>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.label || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, label: e.target.value }))} className="text-xs p-1 border rounded w-full" /> : <span className="text-slate-600">{col.label}</span>}
-                      </td>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="text-xs p-1 border rounded w-32 font-mono uppercase" /> : <span className="font-mono text-xs font-bold text-indigo-600">{col.skuCode || '-'}</span>}
-                      </td>
-                      <td className="py-2 px-4 text-right">
-                        {isRowEditing ? (
-                          <div className="inline-flex gap-2">
-                            <button type="button" onClick={() => handleSecureUpdateRecord('colours', col, { name: editFormFields.name?.trim(), label: editFormFields.label?.trim(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-1 bg-[#00A896] text-white rounded hover:bg-[#008f80]"><Check className="w-3.5 h-3.5" /></button>
-                            <button type="button" onClick={cancelInlineEditingRow} className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"><XCircle className="w-3.5 h-3.5" /></button>
+                    <div key={currentId} className={`p-4 rounded-2xl border shadow-sm flex flex-col gap-3 ${isMobileEditing ? "bg-amber-50/40 border-amber-300" : "bg-white border-slate-200"}`}>
+                      
+                      {/* CARD CONTENT / INPUT FIELDS SWITCH */}
+                      <div className="w-full space-y-2">
+                        {isMobileEditing ? (
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Colour Name</label>
+                              <input type="text" value={editFormFields.name || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, name: e.target.value }))} className="text-xs p-1.5 border rounded w-full bg-white" />
+                            </div>
+                            <div>
+                              <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">SKU Code</label>
+                              <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="text-xs p-1.5 border rounded w-full font-mono uppercase bg-white" />
+                            </div>
                           </div>
                         ) : (
-                          <div className="inline-flex gap-3">
-                            <button type="button" onClick={() => startInlineEditingRow(col)} className="text-[#00A896]"><Edit3 className="w-3.5 h-3.5" /></button>
-                            <button type="button" onClick={() => handleSecureDeleteRecord('colours', col.docId || col.id, col.name)} className="text-[#FF6B35]"><Trash2 className="w-4 h-4" /></button>
+                          <div>
+                            <div className="font-bold text-sm text-slate-900">{c.name}</div>
+                            <div className="text-[10px] text-slate-500 mt-1">SKU: <span className="font-mono text-indigo-600 font-bold">{c.skuCode || '-'}</span></div>
                           </div>
                         )}
-                      </td>
-                    </tr>
+                      </div>
+                      
+                      {/* ACTION BUTTONS Container */}
+                      <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
+                        {isMobileEditing ? (
+                          <div className="inline-flex gap-2">
+                            <button type="button" onClick={() => handleSecureUpdateRecord('colours', c, { name: editFormFields.name?.trim(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-2 bg-[#00A896] text-white rounded-lg"><Check className="w-4 h-4" /></button>
+                            <button type="button" onClick={cancelInlineEditingRow} className="p-2 bg-slate-200 text-slate-600 rounded-lg"><XCircle className="w-4 h-4" /></button>
+                          </div>
+                        ) : (
+                          <div className="inline-flex gap-2">
+                            <button type="button" onClick={() => startInlineEditingRow(c)} className="text-[#00A896] p-2 bg-emerald-50 rounded-lg hover:bg-emerald-100"><Edit3 className="w-4 h-4" /></button>
+                            <button type="button" onClick={() => handleSecureDeleteRecord('colours', c.docId || c.id, c.name)} className="text-[#FF6B35] p-2 bg-red-50 rounded-lg hover:bg-red-100"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-        )}
+              </div>
+            </div>
+          )}
 
-        {/* ==========================================
-           📑 PART 7:C: SUB-LISTS RENDER SHEET (LOCATIONS)
-           ========================================== */}
-        {activeTab === 'locations' && (
-          <div>
-            <form onSubmit={handleAddLocationSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
-              <input type="text" value={newLocationName} onChange={(e) => setNewLocationName(e.target.value)} placeholder="Location Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <input type="text" value={newLocationLabel} onChange={(e) => setNewLocationLabel(e.target.value)} placeholder="Label" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <input type="text" value={newLocationSkuCode} onChange={(e) => setNewLocationSkuCode(e.target.value)} placeholder="SKU Code" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <button type="submit" className="bg-[#00A896] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm">Add</button>
-            </form>
-            <table className="w-full text-left border-collapse text-sm">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 uppercase text-[10px] border-b border-slate-200">
-                  <th className="py-2 px-4">Name</th> <th className="py-2 px-4">Label</th> <th className="py-2 px-4 text-[#FF6B35]">SKU Code</th> <th className="py-2 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
+          {activeTab === 'locations' && (
+            <div className="w-full">
+              {/* ADD FORM */}
+              <form onSubmit={handleAddLocationSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <input type="text" value={newLocationName} onChange={(e) => setNewLocationName(e.target.value)} placeholder="Location Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
+                <input type="text" value={newLocationLabel} onChange={(e) => setNewLocationLabel(e.target.value)} placeholder="Label (e.g., WH-1)" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
+                <input type="text" value={newLocationSkuCode} onChange={(e) => setNewLocationSkuCode(e.target.value)} placeholder="SKU Code" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
+                <button type="submit" className="bg-[#00A896] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm">Save Location</button>
+              </form>
+
+              {/* 🖥️ DESKTOP TABLE (Hidden on Mobile) */}
+              <div className="hidden md:block bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500 uppercase text-[10px] border-b border-slate-200">
+                      <th className="py-2 px-4">Name</th> 
+                      <th className="py-2 px-4">Label</th> 
+                      <th className="py-2 px-4 text-[#FF6B35]">SKU Code</th> 
+                      <th className="py-2 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredLocations.map((loc) => {
+                      const currentId = loc.id || loc.docId;
+                      const isRowEditing = editingRowId === currentId;
+
+                      return (
+                        <tr key={currentId} className={isRowEditing ? "bg-amber-50/40" : ""}>
+                          <td className="py-2 px-4">
+                            {isRowEditing ? <input type="text" value={editFormFields.name || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, name: e.target.value }))} className="text-xs p-1 border rounded w-full bg-white" /> : <span className="font-semibold">{loc.name}</span>}
+                          </td>
+                          <td className="py-2 px-4">
+                            {isRowEditing ? <input type="text" value={editFormFields.label || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, label: e.target.value }))} className="text-xs p-1 border rounded w-full bg-white" /> : <span className="text-slate-600">{loc.label || '-'}</span>}
+                          </td>
+                          <td className="py-2 px-4">
+                            {isRowEditing ? <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="text-xs p-1 border rounded w-32 font-mono uppercase bg-white" /> : <span className="font-mono text-xs font-bold text-indigo-600">{loc.skuCode || '-'}</span>}
+                          </td>
+                          <td className="py-2 px-4 text-right">
+                            {isRowEditing ? (
+                              <div className="inline-flex gap-2">
+                                <button type="button" onClick={() => handleSecureUpdateRecord('locations', loc, { name: editFormFields.name?.trim(), label: editFormFields.label?.trim(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-1 bg-[#00A896] text-white rounded hover:bg-[#008f80]"><Check className="w-3.5 h-3.5" /></button>
+                                <button type="button" onClick={cancelInlineEditingRow} className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"><XCircle className="w-3.5 h-3.5" /></button>
+                              </div>
+                            ) : (
+                              <div className="inline-flex gap-3">
+                                <button type="button" onClick={() => startInlineEditingRow(loc)} className="text-[#00A896]"><Edit3 className="w-3.5 h-3.5" /></button>
+                                <button type="button" onClick={() => handleSecureDeleteRecord('locations', loc.docId || loc.id, loc.name)} className="text-[#FF6B35]"><Trash2 className="w-4 h-4" /></button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 📱 MOBILE CARD LIST (Hidden on Desktop) */}
+              <div className="md:hidden space-y-3">
                 {filteredLocations.map((loc) => {
                   const currentId = loc.id || loc.docId;
-                  const isRowEditing = editingRowId === currentId;
+                  const isMobileEditing = editingRowId === currentId;
 
                   return (
-                    <tr key={currentId} className={isRowEditing ? "bg-amber-50/40" : ""}>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.name || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, name: e.target.value }))} className="text-xs p-1 border rounded w-full" /> : <span className="font-semibold">{loc.name}</span>}
-                      </td>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.label || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, label: e.target.value }))} className="text-xs p-1 border rounded w-full" /> : <span className="text-slate-600">{loc.label}</span>}
-                      </td>
-                      <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="text-xs p-1 border rounded w-32 font-mono" /> : <span className="font-mono text-xs font-bold text-indigo-600">{loc.skuCode || '-'}</span>}
-                      </td>
-                      <td className="py-2 px-4 text-right">
-                        {isRowEditing ? (
-                          <div className="inline-flex gap-2">
-                            <button type="button" onClick={() => handleSecureUpdateRecord('locations', loc, { name: editFormFields.name?.trim(), label: editFormFields.label?.trim(), skuCode: editFormFields.skuCode?.trim() })} className="p-1 bg-[#00A896] text-white rounded hover:bg-[#008f80]"><Check className="w-3.5 h-3.5" /></button>
-                            <button type="button" onClick={cancelInlineEditingRow} className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"><XCircle className="w-3.5 h-3.5" /></button>
+                    <div key={currentId} className={`p-4 rounded-2xl border shadow-sm flex flex-col gap-3 ${isMobileEditing ? "bg-amber-50/40 border-amber-300" : "bg-white border-slate-200"}`}>
+                      
+                      {/* CARD CONTENT / INPUT FIELDS SWITCH */}
+                      <div className="w-full space-y-2">
+                        {isMobileEditing ? (
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Location Name</label>
+                              <input type="text" value={editFormFields.name || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, name: e.target.value }))} className="text-xs p-1.5 border rounded w-full bg-white" />
+                            </div>
+                            <div>
+                              <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Label</label>
+                              <input type="text" value={editFormFields.label || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, label: e.target.value }))} className="text-xs p-1.5 border rounded w-full bg-white" />
+                            </div>
+                            <div>
+                              <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">SKU Code</label>
+                              <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="text-xs p-1.5 border rounded w-full font-mono uppercase bg-white" />
+                            </div>
                           </div>
                         ) : (
-                          <div className="inline-flex gap-3">
-                            <button type="button" onClick={() => startInlineEditingRow(loc)} className="text-[#00A896]"><Edit3 className="w-3.5 h-3.5" /></button>
-                            <button type="button" onClick={() => handleSecureDeleteRecord('locations', loc.docId || loc.id, loc.name)} className="text-[#FF6B35]"><Trash2 className="w-4 h-4" /></button>
+                          <div>
+                            <div className="font-bold text-sm text-slate-900">{loc.name}</div>
+                            <div className="text-[10px] text-slate-500 mt-1">Label: {loc.label || '-'} | SKU: <span className="font-mono text-indigo-600 font-bold">{loc.skuCode || '-'}</span></div>
                           </div>
                         )}
-                      </td>
-                    </tr>
+                      </div>
+                      
+                      {/* ACTION BUTTONS Container */}
+                      <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
+                        {isMobileEditing ? (
+                          <div className="inline-flex gap-2">
+                            <button type="button" onClick={() => handleSecureUpdateRecord('locations', loc, { name: editFormFields.name?.trim(), label: editFormFields.label?.trim(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-2 bg-[#00A896] text-white rounded-lg"><Check className="w-4 h-4" /></button>
+                            <button type="button" onClick={cancelInlineEditingRow} className="p-2 bg-slate-200 text-slate-600 rounded-lg"><XCircle className="w-4 h-4" /></button>
+                          </div>
+                        ) : (
+                          <div className="inline-flex gap-2">
+                            <button type="button" onClick={() => startInlineEditingRow(loc)} className="text-[#00A896] p-2 bg-emerald-50 rounded-lg hover:bg-emerald-100"><Edit3 className="w-4 h-4" /></button>
+                            <button type="button" onClick={() => handleSecureDeleteRecord('locations', loc.docId || loc.id, loc.name)} className="text-[#FF6B35] p-2 bg-red-50 rounded-lg hover:bg-red-100"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
+              </div>
+            </div>
+          )}
+          
           </div>
-        )}
-
-      </div>
     </div>
   );
 }
