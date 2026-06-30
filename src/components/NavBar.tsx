@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { 
   Menu, X, ChevronDown, ChevronRight, Package, Wrench, Users, 
-  Terminal, BarChart3, User, UserCircle, Shirt, Maximize2, Layers, Clock, 
+  Terminal, BarChart3, User, Shirt, Maximize2, Layers, Clock, 
   School, Palette, MapPin, LogOut, Settings
 } from 'lucide-react';
 
 interface NavBarProps {
-  categories: any[];
+  Category: any[];
   activeMainTab: string | null;
   setActiveMainTab: (tab: any) => void;
   activeSubTab: string;
@@ -21,7 +21,7 @@ interface NavBarProps {
 }
 
 export default function NavBar({
-  categories,
+  Category,
   activeMainTab,
   setActiveMainTab,
   activeSubTab,
@@ -45,8 +45,9 @@ export default function NavBar({
   const [managementExpanded, setManagementExpanded] = useState(false);
   const [adminExpanded, setAdminExpanded] = useState(false);
 
-  // Alphabetically sort your live database categories automatically
-  const sortedCategories = [...categories].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  // Alphabetically sort your live database Category automatically
+  const sortedCategories = [...Category].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  
   const handleSelectCategoryPage = (catId: string) => {
     setActiveMainTab('inventory_view');
     setCurrentViewedCategory(catId);
@@ -125,7 +126,7 @@ export default function NavBar({
                   </button>
                 );
               })}
-              {sortedCategories.length === 0 && <span className="block pl-3 py-1 text-[10px] text-white/40 italic">No categories live.</span>}
+              {sortedCategories.length === 0 && <span className="block pl-3 py-1 text-[10px] text-white/40 italic">No Category live.</span>}
             </div>
           )}
         </div>
@@ -150,13 +151,13 @@ export default function NavBar({
           {managementExpanded && (
             <div className="pl-4 border-l border-white/10 ml-5 space-y-1 pt-1 animate-fadeIn">
               {[
-                { id: 'categories', label: 'Master Categories', icon: Layers },
-                { id: 'schoolTypes', label: 'School Types', icon: Clock },
-                { id: 'schools', label: 'School Registry', icon: School },
-                { id: 'types', label: 'Garment Types', icon: Shirt },
-                { id: 'sizes', label: 'Sizes Option', icon: Maximize2 },
-                { id: 'colours', label: 'Colours Profile', icon: Palette },
-                { id: 'locations', label: 'Locations Mapping', icon: MapPin },
+                { id: 'Category', label: 'Category', icon: Layers },
+                { id: 'School Type', label: 'School Type', icon: Clock },
+                { id: 'School', label: 'School', icon: School },
+                { id: 'Clothing Type', label: 'Clothing Type', icon: Shirt },
+                { id: 'Size', label: 'Size', icon: Maximize2 },
+                { id: 'Colour', label: 'Colour', icon: Palette },
+                { id: 'Location', label: 'Location', icon: MapPin },
               ].map((sub) => {
                 const SubIcon = sub.icon;
                 const isCurrent = activeMainTab === 'management_view' && activeSubTab === sub.id;
@@ -214,10 +215,9 @@ export default function NavBar({
           )}
         </div>
       </div>
+      
       {/* 👤 INTERACTIVE USER PROFILE CARD OVERLAY SYSTEM */}
       <div className="relative mt-4 flex-shrink-0 w-full">
-        
-        {/* 🚀 EXPANDABLE DROP-UP POP-OUT WRAPPER */}
         {profileDropdownOpen && (
           <div className="absolute bottom-[calc(100%+10px)] left-0 w-full bg-slate-900 border border-white/10 rounded-2xl p-2 shadow-2xl flex flex-col gap-1 z-50 animate-fadeIn text-left">
             <button 
@@ -240,7 +240,6 @@ export default function NavBar({
           </div>
         )}
 
-        {/* 🟢 UNIFIED BUTTON CONTAINER */}
         <button 
           onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
           className="w-full bg-brand-teal p-3 rounded-2xl flex items-center justify-between border border-white/10 shadow-inner transition hover:brightness-105 active:scale-[0.99] cursor-pointer"
@@ -266,21 +265,18 @@ export default function NavBar({
             </span>
           </div>
         </button>
-
       </div>
     </div>
   );
 
   return (
     <div className="font-sans">
-      {/* 🍔 PHONE HEADERS BAR WITH IMAGE LOGO AVATAR */}
+      {/* 🍔 PHONE HEADERS BAR */}
       <div className="xl:hidden bg-brand-primary text-white px-4 py-2.5 flex items-center justify-between sticky top-0 z-40 w-full shadow-md border-b-2 border-amber-400">
         <div className="flex items-center gap-2.5">
           <button onClick={() => setMobileMenuOpen(true)} className="p-1.5 hover:bg-white/10 rounded-xl transition cursor-pointer">
             <Menu className="w-5 h-5" />
           </button>
-          
-          {/* 📦 TRUE BRAND IMAGE LOGO WRAPPER PILL */}
           <div className="flex items-center gap-2">
             <div className="p-0.5 bg-brand-teal rounded-lg shadow-sm flex items-center justify-center w-8 h-8 shrink-0">
               <img src="/logo.png" alt="Logo" className="w-7 h-7 object-contain rounded-md" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
@@ -293,7 +289,6 @@ export default function NavBar({
         </div>
         <button type="button" onClick={handleSignOut} className="text-white hover:text-orange-400 cursor-pointer"><LogOut className="w-4 h-4" /></button>
       </div>
-
 
       {/* 💻 PC LEFT COLUMN HUB SIDEBAR */}
       <div className="hidden xl:flex flex-col w-64 bg-brand-primary text-white h-screen fixed top-0 left-0 p-5 overflow-hidden z-30 shadow-xl justify-between">
@@ -326,7 +321,6 @@ export default function NavBar({
                   <span className="text-[8px] font-sans text-amber-300 uppercase tracking-widest font-black mt-0.5">Realtime Inventory</span>
                 </div>
               </div>
-
               <button onClick={() => setMobileMenuOpen(false)} className="p-1 text-white/60 hover:text-white rounded-lg"><X className="w-5 h-5" /></button>
             </div>
             <NavLinksMenuTree />

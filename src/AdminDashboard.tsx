@@ -1,46 +1,45 @@
 import React from 'react';
-import AdminPanel from './components/AdminPanel';
-import Management from './components/Management';
 import UserManagement from './UserManagement'; 
 import DevToolsDashboard from './components/DevToolsDashboard';
-import { School, ClothingType, Size, Colour, Location as WarehouseLocation, Category, ItemType } from './types';
+import Management from './components/ManagementDashboard';
 
-// 📡 THE ABSOLUTE TRUTH MASTER PROTOCOL INTERFACE DEFINITION
+// 📡 THE UPDATED MASTER PROTOCOL INTERFACE
 export interface AdminTabContainerProps {
-  schools: School[];
-  clothingTypes: ClothingType[];
-  sizes: Size[];
-  colours: Colour[];
-  locations: WarehouseLocation[]; 
-  categories: Category[];
-  itemTypes: ItemType[];
-  schoolTypes: any[]; 
+  Category: any[];
+  School_Type: any[];
+  School: any[];
+  Clothing_Type: any[];
+  Size: any[];
+  Colour: any[];
+  Location: any[];
   userRole: string;
   forcedSubTabOverride?: string;
 }
 
-export default function AdminTabContainer({
-  schools,
-  clothingTypes,
-  sizes,
-  colours,
-  locations,
-  categories,
-  schoolTypes,
+export default function AdminDashboard({
+  Category,
+  School_Type,
+  School,
+  Clothing_Type,
+  Size,
+  Colour,
+  Location,
   userRole,
   forcedSubTabOverride
 }: AdminTabContainerProps) {
 
   const activeView = forcedSubTabOverride || 'staff';
 
-  const mappedSchools = (schools || []).map((s: any) => ({
+  // Mapping logic
+  const mappedSchools = (School || []).map((s: any) => ({
     id: s.id,
     name: s.name || 'Unnamed School Record',
-    schoolType: s.schoolType || 'JIN',
+    School_Type: s.School_Type || 'JIN',
     schoolIdCode: s.schoolIdCode || (s.skuCode ? s.skuCode.substring(3) : 'META'),
     skuCode: s.skuCode || 'JINMETA',
     logoUrl: s.logoUrl || ''
   }));
+
   return (
     <div className="w-full animate-fadeIn">
       {/* 🧭 ROUTER ENGINE BLOCK */}
@@ -58,22 +57,21 @@ export default function AdminTabContainer({
         <div className="w-full bg-white border border-rose-100 p-8 rounded-3xl text-center text-slate-400 select-none max-w-xl animate-fadeIn">
           <div className="w-10 h-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center mx-auto mb-3">⚠️</div>
           <span className="block text-xs font-mono font-black uppercase tracking-wider text-slate-800">Clearance Access Denied</span>
-          <p className="text-[11px] font-medium text-slate-400 mt-1 leading-relaxed">This terminal is restricted. You do not possess structural credentials to view root developer assets.</p>
         </div>
       ) : null}
 
-
-      {['categories', 'schoolTypes', 'schools', 'types', 'sizes', 'colours', 'locations'].includes(activeView) && (
+      {/* Passing the standardized underscore props */}
+      {['Category', 'School_Type', 'School', 'Clothing_Type', 'Size', 'Colour', 'Location'].includes(activeView) && (
         <Management 
-          schools={mappedSchools}
-          clothingTypes={clothingTypes as any}
-          sizes={sizes as any}
-          colours={colours as any}
-          locations={locations as any}
-          categories={categories || []}
-          schoolTypes={schoolTypes || []}
+          Category={Category}
+          School_Type={School_Type}
+          School={mappedSchools}
+          Clothing_Type={Clothing_Type}
+          Size={Size}
+          Colour={Colour}
+          Location={Location}
           userRole={userRole}
-          forcedSubTabOverride={activeView as any}
+          forcedSubTabOverride={activeView}
         />
       )}
     </div>

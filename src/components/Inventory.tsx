@@ -8,20 +8,20 @@ import { Shirt, Trash2, AlertTriangle, Search, Filter, Loader2, Sparkles, ArrowR
 // ==========================================
 interface StockIntakeFormProps {
   schools: any[];
-  clothingTypes: any[];
-  sizes: any[];
-  colours: any[];
-  locations: any[];
+  Clothing_Type: any[];
+  Size: any[];
+  Colour: any[];
+  Location: any[];
   currentViewedCategory: string | null;
   categories: any[];
 }
 
 function StockIntakeForm({
   schools,
-  clothingTypes,
-  sizes,
-  colours,
-  locations,
+  Clothing_Type,
+  Size,
+  Colour,
+  Location,
   currentViewedCategory,
   categories
 }: StockIntakeFormProps) {
@@ -49,20 +49,20 @@ function StockIntakeForm({
 
   useEffect(() => {
     if (schools.length > 0 && !selectedSchoolId) setSelectedSchoolId(schools[0].id);
-    if (clothingTypes.length > 0 && !selectedClothingTypeId) setSelectedClothingTypeId(clothingTypes[0].id);
-    if (colours.length > 0 && !selectedColourId) setSelectedColourId(colours[0].id);
-    if (sizes.length > 0 && !selectedSizeId) setSelectedSizeId(sizes[0].id);
-    if (locations.length > 0 && !selectedLocationId) setSelectedLocationId(locations[0].id);
-  }, [schools, clothingTypes, colours, sizes, locations]);
+    if (Clothing_Type.length > 0 && !selectedClothingTypeId) setSelectedClothingTypeId(Clothing_Type[0].id);
+    if (Colour.length > 0 && !selectedColourId) setSelectedColourId(Colour[0].id);
+    if (Size.length > 0 && !selectedSizeId) setSelectedSizeId(Size[0].id);
+    if (Location.length > 0 && !selectedLocationId) setSelectedLocationId(Location[0].id);
+  }, [schools, Clothing_Type, Colour, Size, Location]);
 
   const handleFormSubmission = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const currentSchool = schools.find(s => s.id === selectedSchoolId);
-    const currentType = clothingTypes.find(t => t.id === selectedClothingTypeId);
-    const currentColour = colours.find(c => c.id === selectedColourId);
-    const currentSize = sizes.find(s => s.id === selectedSizeId);
-    const currentLocation = locations.find(l => l.id === selectedLocationId);
+    const currentType = Clothing_Type.find(t => t.id === selectedClothingTypeId);
+    const currentColour = Colour.find(c => c.id === selectedColourId);
+    const currentSize = Size.find(s => s.id === selectedSizeId);
+    const currentLocation = Location.find(l => l.id === selectedLocationId);
 
     if (!currentType || !currentColour || !currentSize || !currentLocation) {
       alert("Missing base configuration alignments.");
@@ -232,7 +232,7 @@ function StockIntakeForm({
                   className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 transition"
                   required
                 >
-                  {clothingTypes.map(t => (
+                  {Clothing_Type.map(t => (
                     <option key={t.id} value={t.id}>{t.name} ({t.skuCode})</option>
                   ))}
                 </select>
@@ -246,7 +246,7 @@ function StockIntakeForm({
                   className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 transition"
                   required
                 >
-                  {colours.map(c => (
+                  {Colour.map(c => (
                     <option key={c.id} value={c.id}>{c.name} ({c.skuCode})</option>
                   ))}
                 </select>
@@ -260,7 +260,7 @@ function StockIntakeForm({
                   className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 transition"
                   required
                 >
-                  {sizes.map(s => (
+                  {Size.map(s => (
                     <option key={s.id} value={s.id}>{s.label || s.name} ({s.skuCode})</option>
                   ))}
                 </select>
@@ -280,7 +280,7 @@ function StockIntakeForm({
                   className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 transition"
                   required
                 >
-                  {locations.map(l => (
+                  {Location.map(l => (
                     <option key={l.id} value={l.id}>{l.name} ({l.skuCode})</option>
                   ))}
                 </select>
@@ -391,10 +391,10 @@ interface InventoryProps {
   currentViewedCategory: string | null;
   categories: any[];
   schools: any[];
-  clothingTypes: any[];
-  sizes: any[];
-  colours: any[];
-  locations: any[];
+  Clothing_Type: any[];
+  Size: any[];
+  Colour: any[];
+  Location: any[];
   inventory: any[];
 }
 
@@ -402,10 +402,10 @@ export default function Inventory({
   currentViewedCategory,
   categories,
   schools,
-  clothingTypes,
-  sizes,
-  colours,
-  locations,
+  Clothing_Type,
+  Size,
+  Colour,
+  Location,
   inventory
 }: InventoryProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -514,10 +514,10 @@ const filteredInventory = (inventory || []).filter(item => {
       {activeLayoutMode === 'intake' ? (
         <StockIntakeForm
           schools={schools}
-          clothingTypes={clothingTypes}
-          sizes={sizes}
-          colours={colours}
-          locations={locations}
+          Clothing_Type={Clothing_Type}
+          Size={Size}
+          Colour={Colour}
+          Location={Location}
           currentViewedCategory={currentViewedCategory}
           categories={categories} 
         />
@@ -527,7 +527,7 @@ const filteredInventory = (inventory || []).filter(item => {
           <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row gap-3 items-center">
             <div className="relative flex-1 w-full">
               <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
-              <input type="text" placeholder="Search this category by garments, sizes, colors, or locations..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-xl text-xs focus:outline-none focus:border-brand-primary font-medium" />
+              <input type="text" placeholder="Search this category by garments, Size, colors, or Location..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-xl text-xs focus:outline-none focus:border-brand-primary font-medium" />
             </div>
             {showSchoolColumn && (
               <select value={selectedSchoolFilter} onChange={(e) => setSelectedSchoolFilter(e.target.value)} className="p-2 border rounded-xl text-xs bg-slate-50 font-bold text-slate-600 focus:outline-none cursor-pointer w-full sm:w-auto">
@@ -560,10 +560,10 @@ const filteredInventory = (inventory || []).filter(item => {
                 const displaySchoolName = !showSchoolColumn 
                   ? 'Plain Apparel' 
                   : (matchingSchoolObj ? matchingSchoolObj.name : (item.schoolName && item.schoolName !== 'PLAIN' ? item.schoolName : 'Generic Plain Item'));
-                const rowType = item.garmentType || clothingTypes.find(t => t.skuCode === item.typeSku || t.id === item.typeId)?.name || item.typeSku || 'Garment';
-                const rowSize = item.size || sizes.find(s => s.skuCode === item.sizeSku || s.id === item.sizeId)?.label || item.sizeSku || 'OS';
-                const rowColour = item.colour || colours.find(c => c.skuCode === item.colourSku || c.id === item.colourId)?.name || item.colourSku || 'Standard';
-                const rowLoc = item.location || locations.find(l => l.skuCode === item.locationSku || l.id === item.locationId)?.name || item.locationSku || 'Warehouse Hub';
+                const rowType = item.garmentType || Clothing_Type.find(t => t.skuCode === item.typeSku || t.id === item.typeId)?.name || item.typeSku || 'Garment';
+                const rowSize = item.size || Size.find(s => s.skuCode === item.sizeSku || s.id === item.sizeId)?.label || item.sizeSku || 'OS';
+                const rowColour = item.colour || Colour.find(c => c.skuCode === item.colourSku || c.id === item.colourId)?.name || item.colourSku || 'Standard';
+                const rowLoc = item.location || Location.find(l => l.skuCode === item.locationSku || l.id === item.locationId)?.name || item.locationSku || 'Warehouse Hub';
                 const shelfVal = item.shelfCode && item.shelfCode !== 'UNASSIGNED' ? item.shelfCode : 'FRONT';
 
                 return (
