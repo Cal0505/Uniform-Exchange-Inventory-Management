@@ -537,9 +537,11 @@ const filteredInventory = (inventory || []).filter(item => {
             )}
           </div>
 
-          {/* 📊 SPREADSHEET CANVAS GRID REGISTRY */}
+          {/* 📊 DYNAMIC VIEW: TABLE FOR PC, CARDS FOR MOBILE */}
           <div className="bg-white border border-slate-200 rounded-3xl shadow-xs overflow-hidden w-full">
-            <div className={`grid gap-4 p-4 bg-slate-50 font-black text-slate-500 uppercase tracking-wider text-[10px] border-b text-left
+            
+            {/* --- TABLE VIEW (Only shows on MD screens and up) --- */}
+            <div className={`hidden md:grid gap-4 p-4 bg-slate-50 font-black text-slate-500 uppercase tracking-wider text-[10px] border-b text-left
               ${showSchoolColumn ? 'grid-cols-7' : 'grid-cols-6'}`}
             >
               {showSchoolColumn && <div className="pl-1">School Name</div>}
@@ -553,81 +555,62 @@ const filteredInventory = (inventory || []).filter(item => {
 
             <div className="divide-y divide-slate-100">
               {filteredInventory.map((item: any) => {
-                // Check configurations cleanly to clear out raw SKU codes from UI display cells
+                // Keep your existing variable definitions
                 const matchingSchoolObj = schools.find(s => s.id === item.schoolId);
                 const displaySchoolName = !showSchoolColumn 
                   ? 'Plain Apparel' 
                   : (matchingSchoolObj ? matchingSchoolObj.name : (item.schoolName && item.schoolName !== 'PLAIN' ? item.schoolName : 'Generic Plain Item'));
-
-                  const rowType = item.garmentType || clothingTypes.find(t => t.skuCode === item.typeSku || t.id === item.typeId)?.name || item.typeSku || 'Garment';
-                  const rowSize = item.size || sizes.find(s => s.skuCode === item.sizeSku || s.id === item.sizeId)?.label || item.sizeSku || 'OS';
-                  const rowColour = item.colour || colours.find(c => c.skuCode === item.colourSku || c.id === item.colourId)?.name || item.colourSku || 'Standard';
-                  const rowLoc = item.location || locations.find(l => l.skuCode === item.locationSku || l.id === item.locationId)?.name || item.locationSku || 'Warehouse Hub';
-                  const shelfVal = item.shelfCode && item.shelfCode !== 'UNASSIGNED' ? item.shelfCode : 'FRONT';
+                const rowType = item.garmentType || clothingTypes.find(t => t.skuCode === item.typeSku || t.id === item.typeId)?.name || item.typeSku || 'Garment';
+                const rowSize = item.size || sizes.find(s => s.skuCode === item.sizeSku || s.id === item.sizeId)?.label || item.sizeSku || 'OS';
+                const rowColour = item.colour || colours.find(c => c.skuCode === item.colourSku || c.id === item.colourId)?.name || item.colourSku || 'Standard';
+                const rowLoc = item.location || locations.find(l => l.skuCode === item.locationSku || l.id === item.locationId)?.name || item.locationSku || 'Warehouse Hub';
+                const shelfVal = item.shelfCode && item.shelfCode !== 'UNASSIGNED' ? item.shelfCode : 'FRONT';
 
                 return (
-                  <div key={item.id} className={`grid gap-4 p-4 hover:bg-slate-50/50 transition items-center text-xs font-bold text-slate-700 font-sans text-left
-                    ${showSchoolColumn ? 'grid-cols-7' : 'grid-cols-6'}`}
-                  >
-                    {showSchoolColumn && (
-                      <div className="truncate text-slate-900 select-text font-black">
-                        {displaySchoolName}
+                  <div key={item.id}>
+                    {/* PC TABLE ROW */}
+                    <div className={`hidden md:grid gap-4 p-4 hover:bg-slate-50/50 transition items-center text-xs font-bold text-slate-700 font-sans text-left
+                      ${showSchoolColumn ? 'grid-cols-7' : 'grid-cols-6'}`}
+                    >
+                      {showSchoolColumn && <div className="truncate text-slate-900 font-black">{displaySchoolName}</div>}
+                      <div className="text-brand-primary">{rowType}</div>
+                      <div className="text-center bg-slate-100 px-1.5 py-0.5 rounded-md">{rowSize}</div>
+                      <div>{rowColour}</div>
+                      <div>
+                        <span className="block font-extrabold">{rowLoc}</span>
+                        <span className="text-[10px] text-teal-600">Shelf: {shelfVal}</span>
                       </div>
-                    )}
-
-                    <div className="text-brand-primary uppercase tracking-wide truncate select-text">
-                      {rowType}
+                      <div className="text-right">{item.quantity} units</div>
+                      <div className="text-right pr-2">
+                        <button onClick={() => handleSecureDeleteItem(item.id, item.name || item.skuid)} className="text-slate-400 hover:text-rose-600">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="text-center font-mono uppercase text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-md border w-max mx-auto shrink-0 select-all">
-                      {rowSize}
+                  {/* MOBILE CARD VIEW */}
+                  <div className="md:hidden p-4 border-b border-slate-100 bg-white">
+                    <div className="flex justify-between items-start">
+                      <h3 className="font-bold text-sm text-slate-900">{rowType}</h3>
+                      <span className="px-2 py-0.5 bg-slate-100 rounded-md font-bold text-[10px]">{item.quantity} units</span>
                     </div>
-
-                    <div className="text-slate-500 truncate select-text">
-                      {rowColour}
-                    </div>
-
-                    <div className="leading-tight">
-                      <span className="block text-slate-900 font-extrabold truncate select-text">{rowLoc}</span>
-                      <span className="text-[10px] font-mono font-medium text-teal-600 uppercase tracking-wider block mt-0.5 select-none">
-                        📐 Shelf: {shelfVal}
-                      </span>
-                    </div>
-
-                    <div className="text-right flex items-center justify-end gap-1.5 font-mono pr-1 select-none">
-                      <span className={`px-2 py-0.5 rounded-lg text-xs font-black border tracking-wide
-                        ${Number(item.quantity) <= 5 
-                          ? 'bg-rose-50 text-rose-600 border-rose-100 animate-pulse' 
-                          : 'bg-slate-50 text-slate-900 border-slate-200'
-                        }`}
-                      >
-                        {item.quantity || 0} units
-                      </span>
-                    </div>
-
-                    <div className="text-right flex items-center justify-end select-none pr-1">
-                      <button
-                        type="button"
-                        disabled={isDeletingId === item.id}
-                        onClick={() => handleSecureDeleteItem(item.id, item.name || item.skuid)}
-                        className="p-1.5 text-slate-300 hover:text-rose-600 transition cursor-pointer disabled:opacity-50"
-                      >
-                        {isDeletingId === item.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1">{displaySchoolName} | {rowColour} | {rowSize}</p>
+                    <p className="text-[10px] font-mono text-teal-600 mt-2">📍 {rowLoc} (Shelf: {shelfVal})</p>
                   </div>
-                );
-              })}
-              
-              {filteredInventory.length === 0 && (
-                <div className="p-12 text-center text-slate-400 font-sans uppercase tracking-wider text-xs select-none">
-                  No active inventory records logged matching this criteria filter profile.
                 </div>
-              )}
-            </div>
+              );
+            })}
+            
+            {/* Empty state message */}
+            {filteredInventory.length === 0 && (
+              <div className="p-12 text-center text-slate-400 font-sans uppercase tracking-wider text-xs">
+                No active inventory records logged matching this criteria.
+              </div>
+            )}
           </div>
-        </>
-      )}
-    </div>
-  );
+        </div>
+      </>
+    )}
+  </div>
+);
 }
