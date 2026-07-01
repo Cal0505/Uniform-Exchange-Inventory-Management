@@ -78,7 +78,7 @@ export default function DevToolsDashboard({ userRole }: DevToolsDashboardProps) 
 
     try {
       setIsResyncing(true);
-      const { runDatabaseSeeder } = await import('../seeder');
+      const { runDatabaseSeeder } = await import('../seeder/seeder');
       await runDatabaseSeeder();
       alert("Database Seeded Successfully: 3,000+ mock garments have been compiled and pushed to Firestore.");
     } catch (err) {

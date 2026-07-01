@@ -5,6 +5,16 @@ import {
   School, Palette, MapPin, LogOut, Settings
 } from 'lucide-react';
 
+const NAV_ITEMS = [
+  { id: 'categories', label: 'Categories', icon: Layers },
+  { id: 'schoolTypes', label: 'School Types', icon: Clock },
+  { id: 'schools', label: 'School Registry', icon: School },
+  { id: 'clothingTypes', label: 'Clothing Types', icon: Shirt },
+  { id: 'sizes', label: 'Sizes', icon: Maximize2 },
+  { id: 'colours', label: 'Colours', icon: Palette },
+  { id: 'locations', label: 'Locations', icon: MapPin },
+];
+
 interface NavBarProps {
   categories: any[];
   activeMainTab: string | null;
@@ -149,15 +159,7 @@ export default function NavBar({
 
           {managementExpanded && (
             <div className="pl-4 border-l border-white/10 ml-5 space-y-1 pt-1 animate-fadeIn">
-              {[
-                { id: 'categories', label: 'Master Categories', icon: Layers },
-                { id: 'schoolTypes', label: 'School Types', icon: Clock },
-                { id: 'schools', label: 'School Registry', icon: School },
-                { id: 'types', label: 'Garment Types', icon: Shirt },
-                { id: 'sizes', label: 'Sizes Option', icon: Maximize2 },
-                { id: 'colours', label: 'Colours Profile', icon: Palette },
-                { id: 'locations', label: 'Locations Mapping', icon: MapPin },
-              ].map((sub) => {
+              {NAV_ITEMS.map((sub) => {
                 const SubIcon = sub.icon;
                 const isCurrent = activeMainTab === 'management_view' && activeSubTab === sub.id;
                 return (

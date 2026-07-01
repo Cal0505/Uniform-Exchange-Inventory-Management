@@ -14,6 +14,8 @@ interface ManagementDashboardProps {
   sizes: any[];
   colours: any[];
   locations: any[];
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
   userRole?: string;
   forcedSubTabOverride?: any;
 }
@@ -26,11 +28,12 @@ export default function ManagementDashboard({
   sizes,
   colours,
   locations,
+  activeTab,
+  setActiveTab,
   userRole,
   forcedSubTabOverride
 }: ManagementDashboardProps) {
-  // Navigation & Form Submission States
-  const [activeTab, setActiveTab] = useState<string>('categories');
+  // Form Submission States (activeTab is now managed via props)
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   
   // Inline Editing Tracking State Engine
@@ -77,7 +80,7 @@ export default function ManagementDashboard({
   const [newLocationName, setNewLocationName] = useState<string>('');
   const [newLocationLabel, setNewLocationLabel] = useState<string>('');
   const [newLocationSkuCode, setNewLocationSkuCode] = useState<string>('');
-  
+
   // ==========================================
   // 🔒 PART 2:A SECURE UNIVERSAL DEPENDENCY CHECK
   // ==========================================
@@ -86,7 +89,7 @@ export default function ManagementDashboard({
       setIsSubmitting(true);
 
       let entityReadableName = 'Item';
-      if (collectionName === 'categories') entityReadableName = 'Master Category';
+      if (collectionName === 'categories') entityReadableName = 'Category';
       else if (collectionName === 'schoolTypes') entityReadableName = 'School Type';
       else if (collectionName === 'schools') entityReadableName = 'School Registry';
       else if (collectionName === 'clothingTypes') entityReadableName = 'Garment Type';
@@ -490,7 +493,7 @@ export default function ManagementDashboard({
               activeTab === tab ? 'bg-[#00A896] text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
             }`}
           >
-            {tab.replace(/([A-Z])/g, ' $1')}
+            {tab === 'schools' ? 'School Registry' : tab.replace(/([A-Z])/g, ' $1')}
           </button>
         ))}
       </div>
@@ -521,7 +524,7 @@ export default function ManagementDashboard({
               <input type="text" value={newCatId} onChange={(e) => setNewCatId(e.target.value)} placeholder="Category ID" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
               <input type="text" value={newCatSkuPrefix} onChange={(e) => setNewCatSkuPrefix(e.target.value)} placeholder="SKU Prefix" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
               <select value={newCatPackagingType} onChange={(e) => setNewCatPackagingType(e.target.value)} className="text-xs p-2 border border-slate-200 rounded-lg bg-white outline-none focus:border-[#00A896]">
-                <option value="Both">Both</option> <option value="Single">Single</option> <option value="Bulk">Bulk</option>
+                <option value="Both">Both</option> <option value="Single">Single</option> <option value="VacPac">VacPac</option>
               </select>
               <div className="flex items-center justify-between gap-2">
                 <label className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1">
@@ -554,7 +557,7 @@ export default function ManagementDashboard({
                       <td className="py-2 px-4">
                         {isRowEditing ? (
                           <select value={editFormFields.packagingType || 'Both'} onChange={(e) => setEditFormFields(prev => ({ ...prev, packagingType: e.target.value }))} className="text-xs p-1 border rounded bg-white">
-                            <option value="Both">Both</option> <option value="Single">Single</option> <option value="Bulk">Bulk</option>
+                            <option value="Both">Both</option> <option value="Single">Single</option> <option value="VacPac">VacPac</option>
                           </select>
                         ) : <span className="text-slate-500 text-xs">{cat.packagingType || 'Both'}</span>}
                       </td>

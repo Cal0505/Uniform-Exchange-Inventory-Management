@@ -4,8 +4,8 @@ import { getFirestore } from 'firebase/firestore';
 
 // 🔌 YOUR FRESH APPMOBILE CLOUD FIREBASE SERVERS CHANNELS KEYS
 const firebaseConfig = {
-  apiKey: "AIzaSyDwoXVlyu0DkNeEP9VK-E0Ul105vHMXydU",
-  authDomain: "://firebaseapp.com",
+  apiKey: "AIzaSyDwoXVlYu0DkNeEP9VK-E0UL105vHMXydU",
+  authDomain: "uniformex-inventory-app.firebaseapp.com",
   projectId: "uniformex-inventory-app",
   storageBucket: "uniformex-inventory-app.firebasestorage.app",
   messagingSenderId: "962236027572",

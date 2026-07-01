@@ -140,7 +140,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex flex-col xl:flex-row font-sans antialiased text-[#54595F] w-full">
       
-      {/* 🧭 NAVIGATION SIDEBAR DRAWER CONTROLLER */}
       <NavBar 
         categories={dataPool.categories || []}
         activeMainTab={activeMainTab}
@@ -156,10 +155,8 @@ export default function App() {
         loading={!!dataPool.loading}
       />
 
-      {/* 💻 MAIN OPERATIONS CANVAS REGISTRY GRID */}
       <main className="flex-1 p-4 md:p-8 xl:pl-72 overflow-x-hidden w-full">
         
-        {/* 👋 WELCOME DASHBOARD COMMAND CENTER LANDING VIEW */}
         {activeMainTab === null && (
           <HomeLanding 
             categories={dataPool.categories || []}
@@ -171,7 +168,7 @@ export default function App() {
             tasksList={tasksList}
           />
         )}
-        {/* INVENTORY VIEWS ROUTER */}
+        
         {activeMainTab === 'inventory_view' && (
           <Inventory 
             currentViewedCategory={currentViewedCategory}
@@ -185,7 +182,7 @@ export default function App() {
           />
         )}
 
-        {/* ⚙️ DYNAMIC DATA SHEETS ROUTER FOR THE MANAGEMENT DRILLDOWN */}
+        {/* ⚙️ SYNCED MANAGEMENT DRILLDOWN */}
         {activeMainTab === 'management_view' && (
           <Management 
             schools={mappedSchools} 
@@ -196,11 +193,11 @@ export default function App() {
             categories={dataPool.categories || []} 
             schoolTypes={dataPool.schoolTypes || []} 
             userRole={userRole}
-            forcedSubTabOverride={activeSubTab as any}
+            activeTab={activeSubTab}
+            setActiveTab={setActiveSubTab}
           />
         )}
 
-        {/* 👥 REAL-TIME CLOUD ACCESS CONTROL ROUTER HOOK */}
         {activeMainTab === 'staff' && (
           <AdminTabContainer 
             schools={mappedSchools as any} 
@@ -216,7 +213,6 @@ export default function App() {
           />
         )}
 
-        {/* ADMIN TASKS TELEMETRY RENDER CELLS */}
         {activeMainTab === 'dev' && (
           <AdminTabContainer 
             schools={[]} 
@@ -232,8 +228,6 @@ export default function App() {
           />
         )}
 
-        
-        {/* 📊 REAL-TIME LIVE INVENTORY ANALYTICS HUB LOG STATISTICS */}
         {activeMainTab === 'statistics' && (
           <StatsDashboard 
             inventory={dataPool.inventory || []} 
@@ -242,7 +236,6 @@ export default function App() {
           />
         )}
 
-        {/* INDIVIDUAL ACCOUNT DASHBOARD VIEW */}
         {activeMainTab === 'account' && (<AccountPage userEmail={loggedInEmail} userRole={userRole} />)}
 
       </main>

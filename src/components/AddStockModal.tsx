@@ -268,6 +268,9 @@ export default function AddStockModal({
     }
   };
 
+
+
+  
   return (
     <AnimatePresence>
       {isOpen && (
