@@ -4,7 +4,7 @@ export interface School {
   skuCode: string;
 }
 
-export interface Clothing_Type {
+export interface ClothingType {
   id: string;
   name: string;
   skuCode: string;

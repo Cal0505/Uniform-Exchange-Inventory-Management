@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { School, Clothing_Type, Size, Colour, Location } from '../types';
+import { School, ClothingType, Size, Colour, Location } from '../types';
 import { db } from '../firebase';
 import { doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { generateSkuid, validateShelfCode } from '../skuUtils';
@@ -11,20 +11,20 @@ interface CsvImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   schools: School[];
-  Clothing_Type: Clothing_Type[];
-  Size: Size[];
-  Colour: Colour[];
-  Location: Location[];
+  clothingTypes: ClothingType[];
+  sizes: Size[];
+  colours: Colour[];
+  locations: Location[];
 }
 
 export default function CsvImportModal({
   isOpen,
   onClose,
   schools,
-  Clothing_Type,
-  Size,
-  Colour,
-  Location,
+  clothingTypes,
+  sizes,
+  colours,
+  locations,
 }: CsvImportModalProps) {
   const [csvText, setCsvText] = useState('');
   const [excelRows, setExcelRows] = useState<any[][] | null>(null);
@@ -195,51 +195,51 @@ export default function CsvImportModal({
       };
 
       const findColour = (val: string) => {
-        if (!val) return Colour[0];
+        if (!val) return colours[0];
         const v = val.trim().toLowerCase();
-        return Colour.find(c => 
+        return colours.find(c => 
           c.id === val || 
           c.skuCode.toLowerCase() === v || 
           c.name.toLowerCase() === v ||
           c.name.toLowerCase().includes(v)
-        ) || Colour[0];
+        ) || colours[0];
       };
 
       const findType = (val: string) => {
-        if (!val) return Clothing_Type[0];
+        if (!val) return clothingTypes[0];
         const v = val.trim().toLowerCase().replace(/[\s_]/g, '');
-        return Clothing_Type.find(t => 
+        return clothingTypes.find(t => 
           t.id === val || 
           t.skuCode.toLowerCase() === v || 
           t.name.toLowerCase().replace(/[\s_]/g, '') === v ||
           t.name.toLowerCase().replace(/[\s_]/g, '').includes(v)
-        ) || Clothing_Type[0];
+        ) || clothingTypes[0];
       };
 
       const findSize = (val: string) => {
-        if (!val) return Size[0];
+        if (!val) return sizes[0];
         const v = val.trim().toLowerCase();
-        return Size.find(s => 
+        return sizes.find(s => 
           s.id === val || 
           s.skuCode.toLowerCase() === v || 
           s.label.toLowerCase() === v ||
           s.label.toLowerCase().includes(v)
-        ) || Size[0];
+        ) || sizes[0];
       };
 
       const findLocation = (val: string, type: 'single' | 'vacpac') => {
         const profile = type === 'single' ? 'Pickers Shelf' : 'VacPac Storage Area';
         if (!val) {
-          return Location.find(l => l.ruleProfile === profile) || Location[0];
+          return locations.find(l => l.ruleProfile === profile) || locations[0];
         }
         const v = val.trim().toLowerCase();
-        return Location.find(l => 
+        return locations.find(l => 
           l.ruleProfile === profile && 
           (l.id === val || 
            l.skuCode.toLowerCase() === v || 
            l.name.toLowerCase() === v ||
            l.name.toLowerCase().includes(v))
-        ) || Location.find(l => l.ruleProfile === profile) || Location[0];
+        ) || locations.find(l => l.ruleProfile === profile) || locations[0];
       };
 
       const batch = writeBatch(db);
@@ -425,7 +425,7 @@ export default function CsvImportModal({
 ,Logo,vacpac,VacPac Storage Area,,3,All Hallows,Navy,Boys_Shirts,1-2yrs,50`}
                 </pre>
                 <p className="text-[10px] text-amber-700 mt-1 leading-normal">
-                  Our smart parser maps schools, Colour, garment types, and Size using either their codes or their raw names. It is highly forgiving of spacing and capitalization.
+                  Our smart parser maps schools, colours, garment types, and sizes using either their codes or their raw names. It is highly forgiving of spacing and capitalization.
                 </p>
               </div>
 

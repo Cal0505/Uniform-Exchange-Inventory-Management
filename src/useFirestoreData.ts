@@ -1,20 +1,20 @@
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
-import { School, Clothing_Type, Size, Colour, Location, InventoryItem, Category, ItemType } from './types';
+import { School, ClothingType, Size, Colour, Location, InventoryItem, Category, ItemType } from './types';
 
 export function useFirestoreData() {
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
-  const [School, setSchool] = useState<School[]>([]);
-  const [Clothing_Type, setClothingTypes] = useState<Clothing_Type[]>([]);
-  const [Size, setSizes] = useState<Size[]>([]);
-  const [Colour, setColours] = useState<Colour[]>([]);
-  const [Location, setLocations] = useState<Location[]>([]);
-  const [Category, setCategories] = useState<Category[]>([]);
+  const [schools, setSchools] = useState<School[]>([]);
+  const [clothingTypes, setClothingTypes] = useState<ClothingType[]>([]);
+  const [sizes, setSizes] = useState<Size[]>([]);
+  const [colours, setColours] = useState<Colour[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   
-  // 🎯 RENAMED FROM schoolClassifications TO School_Type REFS PER CLOUD MIGRATION
-  const [School_Type, setSchoolTypes] = useState<any[]>([]);
+  // 🎯 RENAMED FROM schoolClassifications TO schoolTypes REFS PER CLOUD MIGRATION
+  const [schoolTypes, setSchoolTypes] = useState<any[]>([]);
   
   const [itemTypes, setItemTypes] = useState<ItemType[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -27,41 +27,41 @@ export function useFirestoreData() {
       console.warn(`[Firestore Safe Cache Mode]: Standing by for connection sync on collection: ${collectionName}`, err.message);
     };
 
-    const unsubSchool = onSnapshot(collection(db, 'School'), (snap) => {
+    const unsubSchools = onSnapshot(collection(db, 'schools'), (snap) => {
       const items: School[] = []; snap.forEach((d) => items.push({ id: d.id, ...d.data() } as School));
-      setSchool(items.sort((a, b) => a.name.localeCompare(b.name)));
-    }, safeError('School'));
+      setSchools(items.sort((a, b) => a.name.localeCompare(b.name)));
+    }, safeError('schools'));
 
-    const unsubTypes = onSnapshot(collection(db, 'Clothing_Type'), (snap) => {
-      const items: Clothing_Type[] = []; snap.forEach((d) => items.push({ id: d.id, ...d.data() } as Clothing_Type));
+    const unsubTypes = onSnapshot(collection(db, 'clothingTypes'), (snap) => {
+      const items: ClothingType[] = []; snap.forEach((d) => items.push({ id: d.id, ...d.data() } as ClothingType));
       setClothingTypes(items.sort((a, b) => a.name.localeCompare(b.name)));
-    }, safeError('Clothing_Type'));
+    }, safeError('clothingTypes'));
 
-    const unsubSizes = onSnapshot(collection(db, 'Size'), (snap) => {
+    const unsubSizes = onSnapshot(collection(db, 'sizes'), (snap) => {
       const items: Size[] = []; snap.forEach((d) => items.push({ id: d.id, ...d.data() } as Size));
       setSizes(items);
-    }, safeError('Size'));
+    }, safeError('sizes'));
 
-    const unsubColours = onSnapshot(collection(db, 'Colour'), (snap) => {
+    const unsubColours = onSnapshot(collection(db, 'colours'), (snap) => {
       const items: Colour[] = []; snap.forEach((d) => items.push({ id: d.id, ...d.data() } as Colour));
       setColours(items.sort((a, b) => a.name.localeCompare(b.name)));
-    }, safeError('Colour'));
+    }, safeError('colours'));
 
-    const unsubLocations = onSnapshot(collection(db, 'Location'), (snap) => {
+    const unsubLocations = onSnapshot(collection(db, 'locations'), (snap) => {
       const items: Location[] = []; snap.forEach((d) => items.push({ id: d.id, ...d.data() } as Location));
       setLocations(items.sort((a, b) => a.name.localeCompare(b.name)));
-    }, safeError('Location'));
+    }, safeError('locations'));
 
-    const unsubCategories = onSnapshot(collection(db, 'Category'), (snap) => {
+    const unsubCategories = onSnapshot(collection(db, 'categories'), (snap) => {
       const items: Category[] = []; snap.forEach((d) => items.push({ id: d.id, ...d.data() } as Category));
       setCategories(items.sort((a, b) => a.name.localeCompare(b.name)));
-    }, safeError('Category'));
+    }, safeError('categories'));
 
-    // 🎯 POINTED LISTENERS DIRECTLY TO YOUR FRESH School_Type FOLDER AND ORDERED BY YOUR sortOrder NUMBER
-    const unsubSchoolTypes = onSnapshot(collection(db, 'School_Type'), (snap) => {
+    // 🎯 POINTED LISTENERS DIRECTLY TO YOUR FRESH schoolTypes FOLDER AND ORDERED BY YOUR sortOrder NUMBER
+    const unsubSchoolTypes = onSnapshot(collection(db, 'schoolTypes'), (snap) => {
       const items: any[] = []; snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
       setSchoolTypes(items.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)));
-    }, safeError('School_Type'));
+    }, safeError('schoolTypes'));
 
     const unsubItemTypes = onSnapshot(collection(db, 'itemTypes'), (snap) => {
       const items: any[] = []; snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
@@ -85,7 +85,7 @@ export function useFirestoreData() {
     }, safeError('inventory'));
 
     return () => {
-      unsubSchool(); unsubTypes(); unsubSizes(); unsubColours();
+      unsubSchools(); unsubTypes(); unsubSizes(); unsubColours();
       unsubLocations(); unsubCategories(); unsubSchoolTypes(); 
       unsubItemTypes(); unsubUsers(); unsubTickets(); unsubInventory();
     };
@@ -93,7 +93,7 @@ export function useFirestoreData() {
 
   // 🎯 SAFELY EXPORTS ALL ARRAYS WITH THE CORRECT NEW NAMING BLUEPRINT
   return { 
-    School, Clothing_Type, Size, Colour, Location, Category, 
-    School_Type, itemTypes, inventory, users, developer_tickets, loading, seeding 
+    schools, clothingTypes, sizes, colours, locations, categories, 
+    schoolTypes, itemTypes, inventory, users, developer_tickets, loading, seeding 
   };
 }
