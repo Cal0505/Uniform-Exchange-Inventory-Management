@@ -31,10 +31,10 @@ export async function seedSchools() {
   const [catSnap, schoolSnap, typeSnap, sizeSnap, colSnap, locSnap] = await Promise.all([
     getDocs(collection(db, 'categories')),
     getDocs(collection(db, 'schools')),
-    getDocs(collection(db, 'clothingTypes')),
-    getDocs(collection(db, 'sizes')),
-    getDocs(collection(db, 'colours')),
-    getDocs(collection(db, 'locations'))
+    getDocs(collection(db, 'Clothing Type')),
+    getDocs(collection(db, 'Size')),
+    getDocs(collection(db, 'Colour')),
+    getDocs(collection(db, 'Location'))
   ]);
 
   if (catSnap.empty || typeSnap.empty || sizeSnap.empty) {

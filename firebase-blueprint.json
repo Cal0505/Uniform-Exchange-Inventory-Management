@@ -86,21 +86,21 @@
       "schema": "School",
       "description": "Collection of schools mapped to code"
     },
-    "/clothingTypes/{typeId}": {
+    "/Clothing Type/{typeId}": {
       "schema": "ClothingType",
       "description": "Collection of garment types mapped to code"
     },
-    "/sizes/{sizeId}": {
+    "/Size/{sizeId}": {
       "schema": "Size",
-      "description": "Collection of sizes mapped to code"
+      "description": "Collection of Size mapped to code"
     },
-    "/colours/{colourId}": {
+    "/Colour/{colourId}": {
       "schema": "Colour",
-      "description": "Collection of colours mapped to code"
+      "description": "Collection of Colour mapped to code"
     },
-    "/locations/{locationId}": {
+    "/Location/{locationId}": {
       "schema": "Location",
-      "description": "Collection of locations and their warehouse profile"
+      "description": "Collection of Location and their warehouse profile"
     },
     "/inventory/{itemId}": {
       "schema": "InventoryItem",
