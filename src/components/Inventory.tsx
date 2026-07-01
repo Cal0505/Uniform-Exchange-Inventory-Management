@@ -20,10 +20,8 @@ export default function Inventory({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // State for Filters
   const [filters, setFilters] = useState({ search: '', schoolId: 'ALL', clothingType: 'ALL', size: 'ALL' });
   
-  // State for Adding New Item
   const [newItem, setNewItem] = useState({ 
     schoolId: '', quantity: '', size: '', colour: '', clothingType: '', 
     packagingType: 'Single', location: '', extraField: '' 
@@ -32,7 +30,6 @@ export default function Inventory({
   const activeCategoryObj = categories.find(c => c.id === currentViewedCategory);
   const showSchoolColumn = activeCategoryObj?.hasSchools ?? true;
 
-  // Helper: Dynamic Label for Form
   const getExtraFieldLabel = () => {
     if (newItem.packagingType === 'Single') return 'Shelf';
     if (newItem.packagingType === 'VacPac') return 'VacPac ID';
@@ -42,7 +39,6 @@ export default function Inventory({
     return 'Details';
   };
 
-  // Logic: Filtered Inventory
   const filteredInventory = useMemo(() => {
     return (inventory || []).filter(item => {
       if (item.categoryId !== currentViewedCategory) return false;
@@ -74,7 +70,7 @@ export default function Inventory({
   return (
     <div className="space-y-6 text-left select-none w-full max-w-5xl">
       
-      {/* 🔍 FILTER BAR */}
+      {/* FILTER BAR */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs grid grid-cols-2 md:grid-cols-6 gap-3 items-center">
         <div className="col-span-2 md:col-span-2 relative">
            <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
@@ -103,7 +99,7 @@ export default function Inventory({
         </button>
       </div>
 
-      {/* 📊 DATA TABLE */}
+      {/* DATA TABLE */}
       <div className="bg-white border border-slate-200 rounded-3xl shadow-xs overflow-hidden w-full">
         <div className={`grid gap-4 p-4 bg-slate-50 font-black text-slate-500 uppercase tracking-wider text-[10px] border-b ${showSchoolColumn ? 'grid-cols-7' : 'grid-cols-6'}`}>
           {showSchoolColumn && <div className="pl-1">School</div>}
@@ -129,7 +125,7 @@ export default function Inventory({
         </div>
       </div>
 
-      {/* ➕ MODAL FORM */}
+      {/* MODAL FORM */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form onSubmit={handleAddItem} className="bg-white rounded-3xl p-8 shadow-2xl w-full max-w-lg relative animate-in fade-in zoom-in duration-200">
