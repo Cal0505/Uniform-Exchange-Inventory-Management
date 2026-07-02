@@ -1,7 +1,7 @@
 import React from 'react';
 import AdminPanel from './components/AdminPanel';
 import Management from './components/Management';
-import UserManagement from './UserManagement'; 
+import UserManagement from './context/UserManagement'; 
 import DevToolsDashboard from './components/DevToolsDashboard';
 import { School, ClothingType, Size, Colour, Location as WarehouseLocation, Category, ItemType } from './types';
 

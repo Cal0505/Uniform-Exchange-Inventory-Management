@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getStorage } from 'firebase/storage';
 import { getFirestore } from 'firebase/firestore';
+import { getAuth } from "firebase/auth";
 
 // 🔌 YOUR FRESH APPMOBILE CLOUD FIREBASE SERVERS CHANNELS KEYS
 const firebaseConfig = {
@@ -14,10 +15,8 @@ const firebaseConfig = {
 
 // Initialize Firebase App Instance
 const app = initializeApp(firebaseConfig);
-
-// Direct connector to your fresh database
+export const auth = getAuth(app);
 export const db = getFirestore(app);
-
 export const storage = getStorage(app);
 
 // Structured Error Handling for Firestore Security Rules / Permissions

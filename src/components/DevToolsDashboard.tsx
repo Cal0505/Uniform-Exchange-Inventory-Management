@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot, query, orderBy, doc, updateDoc, getDocs, deleteDoc, writeBatch } from 'firebase/firestore';
-import { Terminal, RefreshCw, Radio, HardDrive, AlertTriangle, FileText, Search, X, ShieldAlert, Activity, ShieldX, Zap, Sliders, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
+import { collection, onSnapshot, query, orderBy, doc, updateDoc, getDocs, writeBatch } from 'firebase/firestore';
+import { Terminal, RefreshCw, HardDrive, FileText, Search, X, ShieldAlert, ShieldX, Zap, Sliders, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
 
 interface DevToolsDashboardProps {
   userRole: string;
@@ -14,11 +14,7 @@ export default function DevToolsDashboard({ userRole }: DevToolsDashboardProps) 
   const [isResyncing, setIsResyncing] = useState(false);
   const [isLockedDown, setIsLockedDown] = useState(false);
   const [isTogglingLock, setIsTogglingLock] = useState(false);
-  const [multiplyFactor, setMultiplyFactor] = useState('2');
-  const [isMultiplying, setIsMultiplying] = useState(false);
   const [latencyPing, setLatencyPing] = useState<number | null>(null);
-
-  // 📡 DYNAMIC SYSTEM CONTROL STATES
   const [isBypassActive, setIsBypassActive] = useState(false);
   const [isTogglingBypass, setIsTogglingBypass] = useState(false);
   const [isClearingCollection, setIsClearingCollection] = useState<string | null>(null);
@@ -55,6 +51,7 @@ export default function DevToolsDashboard({ userRole }: DevToolsDashboardProps) 
 
     return () => { unsubLogs(); unsubConfig(); clearInterval(pingInterval); };
   }, []);
+
   const handleToggleSystemLockdown = async () => {
     try {
       setIsTogglingLock(true);
@@ -70,7 +67,6 @@ export default function DevToolsDashboard({ userRole }: DevToolsDashboardProps) 
     } catch (err) { console.error(err); } finally { setIsTogglingBypass(false); }
   };
 
-  // 🔴 DESTRUCTIVE ACTIONS: EXCLUSIVE MASTER DEV COMBINATORICS MASS SEEDER
   const handleRunLocalSeederEngine = async () => {
     if (userRole !== 'Master_Dev') { alert("Clearance Error: Master Dev credentials required."); return; }
     const secureKeyInput = prompt("SECURITY OVERWRITE CHECK: Enter Master Developer Password to execute 3,000+ items matrix seeder:");
@@ -87,15 +83,13 @@ export default function DevToolsDashboard({ userRole }: DevToolsDashboardProps) 
     } finally { setIsResyncing(false); }
   };
 
-  // 🔴 DESTRUCTIVE ACTIONS: EXCLUSIVE MASTER DEV ALL REPOSITORIES WIPER
   const handleWipeEntireDatabaseExceptStaff = async () => {
     if (userRole !== 'Master_Dev') { alert("Clearance Error: Master Dev credentials required."); return; }
     const secureKeyInput = prompt("SECURITY OVERWRITE CHECK: Enter Master Developer Password to proceed with absolute wipe:");
     if (secureKeyInput !== 'J4sp3r#M1sty') { alert("Access Denied: Invalid Security Passkey."); return; }
 
-    if (!window.confirm("🔴 CRITICAL WARNING: You are about to completely destroy your entire warehouse database. Proceed?")) return;
+    if (!window.confirm("CRITICAL WARNING: You are about to completely destroy your entire warehouse database. Proceed?")) return;
     try {
-      setIsMultiplying(true);
       const targetCollections = ['inventory', 'schools', 'categories', 'clothingTypes', 'sizes', 'colours', 'locations', 'tasks', 'news_feed', 'user_requests'];
       for (const colName of targetCollections) {
         const snap = await getDocs(collection(db, colName));
@@ -103,9 +97,10 @@ export default function DevToolsDashboard({ userRole }: DevToolsDashboardProps) 
         snap.docs.forEach(d => batch.delete(doc(db, colName, d.id)));
         await batch.commit();
       }
-      alert("Database Wipe Complete: All categories, schools, layouts, and items cleaned. Staff list skipped.");
-    } catch (err) { console.error(err); } finally { setIsMultiplying(false); }
+      alert("Database Wipe Complete.");
+    } catch (err) { console.error(err); }
   };
+
   const handleClearCollectionPool = async (collectionName: string, userLabel: string) => {
     if (!window.confirm(`CRITICAL OVERRIDE: Are you completely certain you want to permanently delete all cloud records inside the "${userLabel}" database table?`)) return;
     try {
@@ -118,18 +113,6 @@ export default function DevToolsDashboard({ userRole }: DevToolsDashboardProps) 
     } catch (err) { console.error(err); } finally { setIsClearingCollection(null); }
   };
 
-  const handleMassMultiplyInventory = async () => {
-    const scaleFactor = Number(multiplyFactor);
-    if (isNaN(scaleFactor) || scaleFactor <= 0) return;
-    try {
-      setIsMultiplying(true);
-      const snapshot = await getDocs(collection(db, 'inventory'));
-      const batch = writeBatch(db);
-      snapshot.docs.forEach((d) => { batch.update(doc(db, 'inventory', d.id), { quantity: (Number(d.data().quantity) || 0) * scaleFactor }); });
-      await batch.commit();
-    } catch (err) { console.error(err); } finally { setIsMultiplying(false); }
-  };
-
   const handleFlushCacheAndResync = () => { window.location.reload(); };
 
   const filteredLogs = logsList.filter(log => {
@@ -138,18 +121,17 @@ export default function DevToolsDashboard({ userRole }: DevToolsDashboardProps) 
   });
 
   return (
-    <div className="space-y-6 text-left select-none animate-fadeIn w-full max-w-5xl relative">
+    <div className="space-y-6 text-left select-none animate-fadeIn w-full max-w-7xl relative">
       <div>
         <span className="text-[10px] font-mono font-black tracking-widest text-rose-600 uppercase">System Diagnostics</span>
         <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5"><Terminal className="w-5 h-5 text-rose-600" /> Core Developer Terminal</h2>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start w-full">
-        {/* COLUMN 1: DIRECT GLOBAL TOGGLE OVERRIDES */}
+        {/* COLUMN 1: LOGIC OVERRIDES */}
         <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4">
           <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5"><Sliders className="w-4 h-4 text-slate-700" /> Logic Overrides</h4>
           <div className="space-y-3">
-            
             <button type="button" onClick={handleToggleDevBypass} disabled={isTogglingBypass} className={`w-full p-3 border border-dashed rounded-xl text-left flex items-center justify-between group transition cursor-pointer ${isBypassActive ? 'border-amber-300 bg-amber-50/40' : 'border-slate-200 hover:border-amber-400'}`}>
               <div>
                 <p className={`text-xs font-black transition ${isBypassActive ? 'text-amber-600' : 'text-slate-800 group-hover:text-amber-600'}`}>{isBypassActive ? 'Disable Dev Login Bypass' : 'Enable Dev Login Bypass'}</p>
@@ -157,14 +139,14 @@ export default function DevToolsDashboard({ userRole }: DevToolsDashboardProps) 
               </div>
               {isBypassActive ? <ToggleRight className="w-5 h-5 text-amber-500" /> : <ToggleLeft className="w-5 h-5 text-slate-400 group-hover:text-amber-500" />}
             </button>
-
             <button type="button" onClick={handleToggleSystemLockdown} disabled={isTogglingLock} className={`w-full p-3 border border-dashed rounded-xl text-left flex items-center justify-between group transition cursor-pointer ${isLockedDown ? 'border-rose-300 bg-rose-50/40' : 'border-slate-200 hover:border-rose-400'}`}>
               <div><p className={`text-xs font-black transition ${isLockedDown ? 'text-rose-600' : 'text-slate-800 group-hover:text-rose-600'}`}>{isLockedDown ? 'Release System Lockdown' : 'Activate System Lockdown'}</p><p className="text-[10px] text-slate-400 font-medium">Throws the website environment into an absolute read-only view.</p></div>
               <ShieldX className={`w-4 h-4 ${isLockedDown ? 'text-rose-500 animate-pulse' : 'text-slate-400 group-hover:text-rose-500'}`} />
             </button>
           </div>
         </div>
-        {/* COLUMN 2: SELECTIVE COLLECTIONS CELL PURGER SCHEMAS */}
+
+        {/* COLUMN 2: DATABASE COLLECTION CLEARERS */}
         <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4">
           <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5"><Trash2 className="w-4 h-4 text-rose-500" /> Database Collection Clearers</h4>
           <div className="space-y-2">
@@ -178,7 +160,7 @@ export default function DevToolsDashboard({ userRole }: DevToolsDashboardProps) 
           </div>
         </div>
 
-        {/* COLUMN 3: RUNTIME PLATFORM TELEMETRY INFORMATION MONITOR */}
+        {/* COLUMN 3: INFRASTRUCTURE STATUS */}
         <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4">
           <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5"><HardDrive className="w-4 h-4 text-slate-700" /> Infrastructure Status</h4>
           <div className="space-y-2.5 font-mono text-[10px] font-bold text-slate-500">
@@ -186,8 +168,6 @@ export default function DevToolsDashboard({ userRole }: DevToolsDashboardProps) 
             <div className="flex items-center justify-between border-b pb-1.5"><span>Firebase Latency:</span><span className={`font-black ${!latencyPing ? 'text-slate-400' : latencyPing > 250 ? 'text-amber-500' : 'text-emerald-600'}`}>{latencyPing ? `${latencyPing} MS` : 'PING...'}</span></div>
             <div className="flex items-center justify-between pt-0.5"><span>Threat Profile:</span><span className={`font-black ${isLockedDown ? 'text-rose-600' : 'text-slate-900'}`}>{isLockedDown ? 'LOCKDOWN ACTIVE' : 'CLEAR'}</span></div>
           </div>
-
-          {/* 👑 EXCLUSIVE ROOT OVERRIDES FOR MASTER DEV */}
           {userRole === 'Master_Dev' && (
             <div className="space-y-2 pt-2 border-t text-[9px] uppercase tracking-wider font-extrabold flex flex-col">
               <button type="button" onClick={handleRunLocalSeederEngine} className="w-full p-2 bg-teal-600 text-white font-black uppercase rounded-xl flex items-center justify-center gap-1 cursor-pointer hover:bg-teal-700 transition"><Zap className="w-3 h-3" /> Populate 3,000+ Items</button>
@@ -196,6 +176,7 @@ export default function DevToolsDashboard({ userRole }: DevToolsDashboardProps) 
           )}
         </div>
       </div>
+
       {isLogOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn text-xs">
           <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[85vh] flex flex-col p-6 shadow-xl border border-slate-100 animate-scaleUp">
@@ -219,7 +200,6 @@ export default function DevToolsDashboard({ userRole }: DevToolsDashboardProps) 
                   ))}
                 </tbody>
               </table>
-              {filteredLogs.length === 0 && <div className="py-12 text-center text-slate-400 font-sans font-bold uppercase tracking-wider">No audit records found.</div>}
             </div>
           </div>
         </div>

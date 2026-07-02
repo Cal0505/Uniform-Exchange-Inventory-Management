@@ -22,9 +22,9 @@ export default function AccountPage({ userEmail, userRole }: AccountPageProps) {
         const q = query(collection(db, 'users'), where('email', '==', userEmail.toLowerCase().trim()));
         const snap = await getDocs(q);
         if (!snap.empty) {
-          // Lock in the unique document ID and active display name string
+          // Lock in the unique document ID and target displayName
           setUserDocId(snap.docs[0].id);
-          setName(snap.docs[0].data().name || 'Staff Member');
+          setName(snap.docs[0].data().displayName || 'Staff Member');
         }
       } catch (err) {
         console.error('Error connecting to user collection:', err);
@@ -53,15 +53,14 @@ export default function AccountPage({ userEmail, userRole }: AccountPageProps) {
 
     setSaving(true);
     try {
-      // Package up base updates
-      const updatePayload: any = { name: name.trim() };
+      // Use 'displayName' as the key to avoid creating a new 'name' field
+      const updatePayload: any = { displayName: name.trim() };
       
-      // If they opted to alter their password text, append it to transaction payload
       if (password) {
         updatePayload.password = password;
       }
 
-      // 1. Commit modifications to Cloud Firestore users collection
+      // Commit modifications to Cloud Firestore using updateDoc
       await updateDoc(doc(db, 'users', userDocId), updatePayload);
 
       setStatus('success');
@@ -74,10 +73,13 @@ export default function AccountPage({ userEmail, userRole }: AccountPageProps) {
       setSaving(false);
     }
   };
+
   return (
     <div className="max-w-2xl mx-auto bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden p-6 font-sans">
       <div className="border-b border-slate-100 pb-4 mb-6">
-        <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2"><User className="w-5 h-5 text-blue-600" /> Personal Account Settings</h2>
+        <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <User className="w-5 h-5 text-blue-600" /> Personal Account Settings
+        </h2>
         <p className="text-xs text-slate-500 mt-0.5">Modify your profile details and maintain security updates. Your role remains hard-locked.</p>
       </div>
 
