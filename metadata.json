@@ -1,6 +1,6 @@
 {
-  "name": "School Uniform Inventory Management",
-  "description": "A real-time school uniform inventory tracking and management system with live stock tracking, bulk VacPac storage, and picker restock workflows.",
+  "name": "UniformEX | Real Time Inventory Management App",
+  "description": "A real Time Inventory Management system to track items and staff training.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
