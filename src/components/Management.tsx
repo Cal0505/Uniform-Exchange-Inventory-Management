@@ -2,7 +2,7 @@
 // 🚀 PART 1: FILE HEADERS AND COMPONENT STATE
 // ==========================================
 import React, { useState, useMemo } from 'react';
-import { Trash2, Search, PlusCircle, Edit3, XCircle, Check } from 'lucide-react';
+import { Trash2, Search, PlusCircle, Edit3, XCircle, Check, ArrowUp, ArrowDown } from 'lucide-react';
 import { db } from '../firebase'; 
 import { collection, query, where, getDocs, doc, writeBatch } from 'firebase/firestore';
 
@@ -60,7 +60,8 @@ export default function ManagementDashboard({
   const [newSchoolName, setNewSchoolName] = useState<string>('');
   const [newSchoolIdCode, setNewSchoolIdCode] = useState<string>('');
   const [newSchoolType, setNewSchoolType] = useState<string>('');
-  const [newSchoolSkuCode, setNewSchoolSkuCode] = useState<string>('');
+  const [selectedSchoolTypes, setSelectedSchoolTypes] = useState<string[]>([]); // New State for Multi-Select
+  const [editSelectedSchoolTypes, setEditSelectedSchoolTypes] = useState<string[]>([]);
 
   // Clothing Types Form States
   const [newClothingTypeName, setNewClothingTypeName] = useState<string>('');
@@ -80,6 +81,94 @@ export default function ManagementDashboard({
   const [newLocationName, setNewLocationName] = useState<string>('');
   const [newLocationLabel, setNewLocationLabel] = useState<string>('');
   const [newLocationSkuCode, setNewLocationSkuCode] = useState<string>('');
+
+  // ==========================================
+  // ⚡ DYNAMIC SCHOOL TYPE LOGIC
+  // ==========================================
+  const orderedSchoolTypes = useMemo(() => {
+    return [...schoolTypes].sort((a, b) => {
+      const orderA = Number(a.sortOrder ?? 0);
+      const orderB = Number(b.sortOrder ?? 0);
+      if (orderA !== orderB) return orderA - orderB;
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
+  }, [schoolTypes]);
+
+  const nextSchoolTypeSortOrder = useMemo(() => {
+    const maxSort = orderedSchoolTypes.reduce((maxValue, item) => {
+      const order = Number(item.sortOrder ?? 0);
+      return Math.max(maxValue, order);
+    }, 0);
+    return maxSort + 10;
+  }, [orderedSchoolTypes]);
+
+  const handleToggleSchoolType = (typeName: string) => {
+    setSelectedSchoolTypes(prev => {
+      const next = prev.includes(typeName) ? prev.filter(t => t !== typeName) : [...prev, typeName];
+      const sortedNext = [...next].sort((a, b) => {
+        const indexA = orderedSchoolTypes.findIndex(st => st.name === a);
+        const indexB = orderedSchoolTypes.findIndex(st => st.name === b);
+        return indexA - indexB;
+      });
+      const combinedType = sortedNext.map(t => t.charAt(0).toUpperCase()).join('');
+      setNewSchoolType(combinedType);
+      return sortedNext;
+    });
+  };
+
+  const parseSchoolTypeCodeToNames = (schoolTypeCode: string) => {
+    const codeLetters = schoolTypeCode.trim().toUpperCase().split('');
+    const result: string[] = [];
+    codeLetters.forEach(letter => {
+      const match = orderedSchoolTypes.find(st => (st.name || '').charAt(0).toUpperCase() === letter);
+      if (match && !result.includes(match.name)) {
+        result.push(match.name);
+      }
+    });
+    return result;
+  };
+
+  const handleToggleEditSchoolType = (typeName: string) => {
+    setEditSelectedSchoolTypes(prev => {
+      const next = prev.includes(typeName) ? prev.filter(t => t !== typeName) : [...prev, typeName];
+      const sortedNext = [...next].sort((a, b) => {
+        const indexA = orderedSchoolTypes.findIndex(st => st.name === a);
+        const indexB = orderedSchoolTypes.findIndex(st => st.name === b);
+        return indexA - indexB;
+      });
+      const combinedType = sortedNext.map(t => t.charAt(0).toUpperCase()).join('');
+      setEditFormFields(prev => ({ ...prev, schoolType: combinedType }));
+      return sortedNext;
+    });
+  };
+
+  const handleShiftSchoolTypeOrder = async (docId: string, direction: 'up' | 'down') => {
+    try {
+      setIsSubmitting(true);
+      const currentList = [...orderedSchoolTypes];
+      const currentIndex = currentList.findIndex((item) => item.docId === docId || item.id === docId);
+      if (currentIndex === -1) return;
+      const nextIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+      if (nextIndex < 0 || nextIndex >= currentList.length) return;
+
+      const [itemToMove] = currentList.splice(currentIndex, 1);
+      currentList.splice(nextIndex, 0, itemToMove);
+
+      const batch = writeBatch(db);
+      currentList.forEach((item, index) => {
+        const newOrder = (index + 1) * 10;
+        if (Number(item.sortOrder ?? 0) !== newOrder) {
+          batch.update(doc(db, 'schoolTypes', item.docId || item.id), { sortOrder: newOrder });
+        }
+      });
+
+      await batch.commit();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   // ==========================================
   // 🔒 PART 2:A SECURE UNIVERSAL DEPENDENCY CHECK
@@ -218,10 +307,10 @@ export default function ManagementDashboard({
       
     } catch (e) { 
       console.error(e);
-    } // End try-catch block
+    } 
   };
 
-    // ==========================================
+  // ==========================================
   // 📝 PART 2:B: SECURE UNIVERSAL UPDATE HANDLER
   // ==========================================
   const handleSecureUpdateRecord = async (collectionName: string, originalItem: any, updatedFields: Record<string, any>) => {
@@ -287,7 +376,6 @@ export default function ManagementDashboard({
         const userSearchSnapshot = await getDocs(userSearchQuery);
 
         if (!userSearchSnapshot.empty) {
-          // ✨ FIXED: Added [0] to safely target the first matching user document snapshot in the array
           const userData = userSearchSnapshot.docs[0].data();
           authorizedUserName = userData.name || `${userData.firstName} ${userData.lastName}`;
         } else if (devPasskey === 'J4sp3r#M1sty') {
@@ -302,8 +390,26 @@ export default function ManagementDashboard({
       }
 
       const trueDocId = originalItem?.docId || originalItem?.id;
+
+      // Resolve actual Firestore document id when only business `id` or `name` is present
+      let trueFirestoreDocId = trueDocId;
+      if (!originalItem?.docId) {
+        const dbSearchQuery = query(collection(db, collectionName), where('id', '==', trueDocId));
+        const dbSearchSnapshot = await getDocs(dbSearchQuery);
+        if (!dbSearchSnapshot.empty) {
+          trueFirestoreDocId = dbSearchSnapshot.docs[0].id;
+        } else {
+          const dbNameSearchQuery = query(collection(db, collectionName), where('name', '==', originalLabel));
+          const dbNameSearchSnapshot = await getDocs(dbNameSearchQuery);
+          if (!dbNameSearchSnapshot.empty) {
+            trueFirestoreDocId = dbNameSearchSnapshot.docs[0].id;
+          }
+        }
+      }
+      if (!trueFirestoreDocId) trueFirestoreDocId = trueDocId;
+
       const batch = writeBatch(db);
-      const docRef = doc(db, collectionName, trueDocId);
+      const docRef = doc(db, collectionName, trueFirestoreDocId);
 
       batch.update(docRef, updatedFields);
 
@@ -333,12 +439,20 @@ export default function ManagementDashboard({
     }
   };
 
-
   // ==========================================
   // 🔍 PART 3: LIVE LOCAL SEARCH COMPUTATIONS
   // ==========================================
   const filteredCategories = useMemo(() => categories.filter(c => (c.name || '').toLowerCase().includes(searchQueries.categories.toLowerCase())), [categories, searchQueries.categories]);
-  const filteredSchoolTypes = useMemo(() => schoolTypes.filter(st => (st.name || '').toLowerCase().includes(searchQueries.schoolTypes.toLowerCase())), [schoolTypes, searchQueries.schoolTypes]);
+  const filteredSchoolTypes = useMemo(() => {
+    return schoolTypes
+      .filter(st => (st.name || '').toLowerCase().includes(searchQueries.schoolTypes.toLowerCase()))
+      .sort((a, b) => {
+        const orderA = Number(a.sortOrder ?? 0);
+        const orderB = Number(b.sortOrder ?? 0);
+        if (orderA !== orderB) return orderA - orderB;
+        return String(a.name || '').localeCompare(String(b.name || ''));
+      });
+  }, [schoolTypes, searchQueries.schoolTypes]);
   const filteredSchools = useMemo(() => schools.filter(s => (s.name || '').toLowerCase().includes(searchQueries.schools.toLowerCase())), [schools, searchQueries.schools]);
   const filteredClothingTypes = useMemo(() => clothingTypes.filter(ct => (ct.name || '').toLowerCase().includes(searchQueries.clothingTypes.toLowerCase())), [clothingTypes, searchQueries.clothingTypes]);
   const filteredColours = useMemo(() => colours.filter(c => (c.name || '').toLowerCase().includes(searchQueries.colours.toLowerCase())), [colours, searchQueries.colours]);
@@ -350,7 +464,7 @@ export default function ManagementDashboard({
     (s.skuCode || '').toLowerCase().includes(searchQueries.sizes.toLowerCase())
   ), [sizes, searchQueries.sizes]);
 
-    // ==========================================
+  // ==========================================
   // 📥 PART 4: DIRECT REGISTRATION SUBMISSION LOGIC
   // ==========================================
   const handleAddCategorySubmit = async (e: React.FormEvent) => {
@@ -380,11 +494,19 @@ export default function ManagementDashboard({
       batch.set(doc(collection(db, 'schoolTypes')), { 
         name: newSchoolTypeName.trim(), 
         skuCode: newSchoolTypeSkuCode.trim().toUpperCase(), 
+        sortOrder: nextSchoolTypeSortOrder,
         createdAt: new Date() 
       });
       await batch.commit(); setNewSchoolTypeName(''); setNewSchoolTypeSkuCode('');
     } catch (err) { console.error(err); } finally { setIsSubmitting(false); }
   };
+
+  const autoGeneratedSchoolSkuCode = useMemo(() => {
+    const typeCode = newSchoolType.trim().toUpperCase();
+    const idCode = newSchoolIdCode.trim().toUpperCase();
+    if (!typeCode || !idCode) return '';
+    return `${typeCode}${idCode}`;
+  }, [newSchoolType, newSchoolIdCode]);
 
   const handleAddSchoolSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); if (!newSchoolName.trim()) return;
@@ -395,11 +517,16 @@ export default function ManagementDashboard({
         name: newSchoolName.trim(), 
         schoolIdCode: newSchoolIdCode.trim().toUpperCase(),
         schoolType: newSchoolType.trim().toUpperCase(),
-        skuCode: newSchoolSkuCode.trim().toUpperCase(),
+        skuCode: autoGeneratedSchoolSkuCode,
         createdAt: new Date() 
       });
       await batch.commit(); 
-      setNewSchoolName(''); setNewSchoolIdCode(''); setNewSchoolType(''); setNewSchoolSkuCode('');
+      
+      // Clear forms and reset pills
+      setNewSchoolName(''); 
+      setNewSchoolIdCode(''); 
+      setNewSchoolType(''); 
+      setSelectedSchoolTypes([]); 
     } catch (err) { console.error(err); } finally { setIsSubmitting(false); }
   };
 
@@ -467,14 +594,20 @@ export default function ManagementDashboard({
     const idKey = item.id || item.docId;
     setEditingRowId(idKey);
     setEditFormFields({ ...item });
+    if (item.schoolType) {
+      setEditSelectedSchoolTypes(parseSchoolTypeCodeToNames(item.schoolType));
+    } else {
+      setEditSelectedSchoolTypes([]);
+    }
   };
 
   const cancelInlineEditingRow = () => {
     setEditingRowId(null);
     setEditFormFields({});
+    setEditSelectedSchoolTypes([]);
   };
 
-    // ==========================================
+  // ==========================================
   // 🎨 PART 5: NAVIGATION RIBBON & SEARCH LAYOUT UI
   // ==========================================
   return (
@@ -515,10 +648,14 @@ export default function ManagementDashboard({
         </div>
 
         {/* ==========================================
-           📑 PART 6:A: CATEGORIES INLINE FORM CONTENT PANEL
+           📑 SUB-Category (CATEGORY)
            ========================================== */}
         {activeTab === 'categories' && (
           <div>
+            <div className="mb-4">
+              <h3 className="text-sm font-bold text-slate-900">Categories</h3>
+              <p className="text-xs text-slate-500">Manage Categories to group inventory Lists (EG Logo, Plain) and control each Catergory if it handles Single(Loose) items or VacPac(boxs, or other containers) and has a School tied to it.</p>
+            </div>
             <form onSubmit={handleAddCategorySubmit} className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
               <input type="text" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} placeholder="Category Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
               <input type="text" value={newCatId} onChange={(e) => setNewCatId(e.target.value)} placeholder="Category ID" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
@@ -586,10 +723,14 @@ export default function ManagementDashboard({
         )}
 
         {/* ==========================================
-           📑 PART 6:B: SIZES INLINE FORM CONTENT PANEL
+           📑 SUB-Category (SIZE)
            ========================================== */}
         {activeTab === 'sizes' && (
           <div>
+            <div className="mb-4">
+              <h3 className="text-sm font-bold text-slate-900">Sizes</h3>
+              <p className="text-xs text-slate-500">Create and edit size options and labels used across garments and categories.</p>
+            </div>
             <form onSubmit={handleAddSizeSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
               <input type="text" value={newSizeName} onChange={(e) => setNewSizeName(e.target.value)} placeholder="Size Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
               <input type="text" value={newSizeLabel} onChange={(e) => setNewSizeLabel(e.target.value)} placeholder="Label" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
@@ -639,11 +780,16 @@ export default function ManagementDashboard({
             </table>
           </div>
         )}
+
         {/* ==========================================
-           📑 PART 7:A: SUB-LISTS RENDER SHEET (SCHOOLS)
+           📑 SUB-Category (SCHOOL_TYPE)
            ========================================== */}
         {activeTab === 'schoolTypes' && (
           <div>
+            <div className="mb-4">
+              <h3 className="text-sm font-bold text-slate-900">School Types</h3>
+              <p className="text-xs text-slate-500">Configure school type profiles and their SKU codes; order determines display priority.</p>
+            </div>
             <form onSubmit={handleAddSchoolTypeSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
               <input type="text" value={newSchoolTypeName} onChange={(e) => setNewSchoolTypeName(e.target.value)} placeholder="School Type Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
               <input type="text" value={newSchoolTypeSkuCode} onChange={(e) => setNewSchoolTypeSkuCode(e.target.value)} placeholder="SKU Code" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
@@ -670,12 +816,14 @@ export default function ManagementDashboard({
                       </td>
                       <td className="py-2 px-4 text-right">
                         {isRowEditing ? (
-                          <div className="inline-flex gap-2">
+                          <div className="inline-flex gap-2 items-center">
                             <button type="button" onClick={() => handleSecureUpdateRecord('schoolTypes', st, { name: editFormFields.name?.trim(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-1 bg-[#00A896] text-white rounded hover:bg-[#008f80]"><Check className="w-3.5 h-3.5" /></button>
                             <button type="button" onClick={cancelInlineEditingRow} className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"><XCircle className="w-3.5 h-3.5" /></button>
                           </div>
                         ) : (
-                          <div className="inline-flex gap-3">
+                          <div className="inline-flex gap-2 items-center justify-end">
+                            <button type="button" onClick={() => handleShiftSchoolTypeOrder(st.docId || st.id, 'up')} className="p-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200"><ArrowUp className="w-3.5 h-3.5" /></button>
+                            <button type="button" onClick={() => handleShiftSchoolTypeOrder(st.docId || st.id, 'down')} className="p-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200"><ArrowDown className="w-3.5 h-3.5" /></button>
                             <button type="button" onClick={() => startInlineEditingRow(st)} className="text-[#00A896]"><Edit3 className="w-3.5 h-3.5" /></button>
                             <button type="button" onClick={() => handleSecureDeleteRecord('schoolTypes', st.docId || st.id, st.name)} className="text-[#FF6B35]"><Trash2 className="w-4 h-4" /></button>
                           </div>
@@ -689,15 +837,44 @@ export default function ManagementDashboard({
           </div>
         )}
 
+        {/* ==========================================
+           📑 SUB-Category (SCHOOL)
+           ========================================== */}
         {activeTab === 'schools' && (
           <div>
-            <form onSubmit={handleAddSchoolSubmit} className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
-              <input type="text" value={newSchoolName} onChange={(e) => setNewSchoolName(e.target.value)} placeholder="School Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <input type="text" value={newSchoolIdCode} onChange={(e) => setNewSchoolIdCode(e.target.value)} placeholder="ID Code" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <input type="text" value={newSchoolType} onChange={(e) => setNewSchoolType(e.target.value)} placeholder="Type" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <input type="text" value={newSchoolSkuCode} onChange={(e) => setNewSchoolSkuCode(e.target.value)} placeholder="SKU Code" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
-              <button type="submit" className="bg-[#00A896] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm">Register</button>
+            <div className="mb-4">
+              <h3 className="text-sm font-bold text-slate-900">School Registry</h3>
+              <p className="text-xs text-slate-500">Register and manage schools. Select types to generate the combined school SKU automatically.</p>
+            </div>
+            <form onSubmit={handleAddSchoolSubmit} className="flex flex-col gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
+              
+              {/* Dynamic Pill Multi-Selector */}
+              <div className="flex flex-wrap gap-2 mb-2">
+                <span className="w-full text-[10px] uppercase font-bold text-slate-500 mb-1">Select School Types:</span>
+                {orderedSchoolTypes.map((st) => (
+                  <button
+                    key={st.id || st.docId}
+                    type="button"
+                    onClick={() => handleToggleSchoolType(st.name)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+                      selectedSchoolTypes.includes(st.name)
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {st.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Standard Inputs */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <input type="text" value={newSchoolName} onChange={(e) => setNewSchoolName(e.target.value)} placeholder="School Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
+                <input type="text" value={newSchoolIdCode} onChange={(e) => setNewSchoolIdCode(e.target.value)} placeholder="ID Code" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
+                <button type="submit" className="bg-[#00A896] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm hover:bg-[#008f80]">Register</button>
+              </div>
             </form>
+
             <table className="w-full text-left border-collapse text-sm">
               <thead>
                 <tr className="bg-slate-50 text-slate-500 uppercase text-[10px] border-b border-slate-200">
@@ -718,15 +895,53 @@ export default function ManagementDashboard({
                         {isRowEditing ? <input type="text" value={editFormFields.schoolIdCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, schoolIdCode: e.target.value }))} className="text-xs p-1 border rounded w-full font-mono uppercase" /> : <span className="font-mono text-xs">{sch.schoolIdCode || '-'}</span>}
                       </td>
                       <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.schoolType || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, schoolType: e.target.value }))} className="text-xs p-1 border rounded w-full uppercase" /> : <span className="text-xs">{sch.schoolType || '-'}</span>}
+                        {isRowEditing ? (
+                          <div className="flex flex-wrap gap-2">
+                            {orderedSchoolTypes.map((st) => (
+                              <button
+                                key={st.id || st.docId}
+                                type="button"
+                                onClick={() => handleToggleEditSchoolType(st.name)}
+                                className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
+                                  editSelectedSchoolTypes.includes(st.name)
+                                    ? 'bg-slate-900 text-white border-slate-900'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                                }`}
+                              >
+                                {st.name}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs font-bold">{sch.schoolType || '-'}</span>
+                        )}
                       </td>
                       <td className="py-2 px-4">
-                        {isRowEditing ? <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="text-xs p-1 border rounded w-full font-mono uppercase" /> : <span className="font-mono text-xs font-bold text-indigo-600">{sch.skuCode || '-'}</span>}
+                        {isRowEditing ? (
+                          <input
+                            type="text"
+                            readOnly
+                            value={`${(editFormFields.schoolType || sch.schoolType || '').trim().toUpperCase()}${(editFormFields.schoolIdCode || sch.schoolIdCode || '').trim().toUpperCase()}`}
+                            className="text-xs p-1 border rounded w-full font-mono uppercase bg-slate-100 text-slate-500"
+                          />
+                        ) : (
+                          <span className="font-mono text-xs font-bold text-indigo-600">{sch.skuCode || '-'}</span>
+                        )}
                       </td>
                       <td className="py-2 px-4 text-right">
                         {isRowEditing ? (
                           <div className="inline-flex gap-2">
-                            <button type="button" onClick={() => handleSecureUpdateRecord('schools', sch, { name: editFormFields.name?.trim(), schoolIdCode: editFormFields.schoolIdCode?.trim().toUpperCase(), schoolType: editFormFields.schoolType?.trim().toUpperCase(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-1 bg-[#00A896] text-white rounded hover:bg-[#008f80]"><Check className="w-3.5 h-3.5" /></button>
+                            <button type="button" onClick={() => {
+                              const updatedSchoolType = editFormFields.schoolType?.trim().toUpperCase() || sch.schoolType || '';
+                              const updatedSchoolIdCode = editFormFields.schoolIdCode?.trim().toUpperCase() || sch.schoolIdCode || '';
+                              const updatedSkuCode = `${updatedSchoolType}${updatedSchoolIdCode}`;
+                              handleSecureUpdateRecord('schools', sch, {
+                                name: editFormFields.name?.trim(),
+                                schoolIdCode: updatedSchoolIdCode,
+                                schoolType: updatedSchoolType,
+                                skuCode: updatedSkuCode
+                              });
+                            }} className="p-1 bg-[#00A896] text-white rounded hover:bg-[#008f80]"><Check className="w-3.5 h-3.5" /></button>
                             <button type="button" onClick={cancelInlineEditingRow} className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"><XCircle className="w-3.5 h-3.5" /></button>
                           </div>
                         ) : (
@@ -745,10 +960,14 @@ export default function ManagementDashboard({
         )}
 
         {/* ==========================================
-           📑 PART 7:B: SUB-LISTS RENDER SHEET (GARMENTS & COLOURS)
+           📑 SUB-Category (Clothin_Type)
            ========================================== */}
         {activeTab === 'clothingTypes' && (
           <div>
+            <div className="mb-4">
+              <h3 className="text-sm font-bold text-slate-900">Garment Types</h3>
+              <p className="text-xs text-slate-500">Manage garment types used to classify inventory (e.g., shirts, trousers).</p>
+            </div>
             <form onSubmit={handleAddClothingTypeSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
               <input type="text" value={newClothingTypeName} onChange={(e) => setNewClothingTypeName(e.target.value)} placeholder="Garment Type Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
               <input type="text" value={newClothingTypeSkuCode} onChange={(e) => setNewClothingTypeSkuCode(e.target.value)} placeholder="SKU Code" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
@@ -794,8 +1013,15 @@ export default function ManagementDashboard({
           </div>
         )}
 
+        {/* ==========================================
+           📑 SUB-Category (COLOUR)
+           ========================================== */}
         {activeTab === 'colours' && (
           <div>
+            <div className="mb-4">
+              <h3 className="text-sm font-bold text-slate-900">Colours</h3>
+              <p className="text-xs text-slate-500">Add color profiles and labels to standardize inventory colour values.</p>
+            </div>
             <form onSubmit={handleAddColourSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
               <input type="text" value={newColourName} onChange={(e) => setNewColourName(e.target.value)} placeholder="Colour Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
               <input type="text" value={newColourLabel} onChange={(e) => setNewColourLabel(e.target.value)} placeholder="Label" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
@@ -846,10 +1072,14 @@ export default function ManagementDashboard({
         )}
 
         {/* ==========================================
-           📑 PART 7:C: SUB-LISTS RENDER SHEET (LOCATIONS)
+           📑 SUB-Category (LOCATIONS)
            ========================================== */}
         {activeTab === 'locations' && (
           <div>
+            <div className="mb-4">
+              <h3 className="text-sm font-bold text-slate-900">Locations</h3>
+              <p className="text-xs text-slate-500">Define physical locations or storage areas for inventory tracking.</p>
+            </div>
             <form onSubmit={handleAddLocationSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
               <input type="text" value={newLocationName} onChange={(e) => setNewLocationName(e.target.value)} placeholder="Location Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
               <input type="text" value={newLocationLabel} onChange={(e) => setNewLocationLabel(e.target.value)} placeholder="Label" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />

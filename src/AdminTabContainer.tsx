@@ -50,7 +50,7 @@ export default function AdminTabContainer({
         </div>
       )}
 
-      {activeView === 'dev' && (userRole === 'Dev' || userRole === 'Master_Dev') ? (
+      {activeView === 'dev' && (userRole === 'Dev' || userRole === 'Head_Dev') ? (
         <div className="w-full">
           <DevToolsDashboard userRole={userRole} />
         </div>

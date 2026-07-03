@@ -20,7 +20,7 @@ export default function DevToolsDashboard({ userRole }: DevToolsDashboardProps) 
   const [isClearingCollection, setIsClearingCollection] = useState<string | null>(null);
 
   useEffect(() => {
-    const qLogs = query(collection(db, 'system_logs'), orderBy('timestamp', 'desc'));
+    const qLogs = query(collection(db, 'activity_logs'), orderBy('timestamp', 'desc'));
     const unsubLogs = onSnapshot(qLogs, (snapshot) => {
       setLogsList(snapshot.docs.map(d => {
         const data = d.data();
@@ -68,7 +68,7 @@ export default function DevToolsDashboard({ userRole }: DevToolsDashboardProps) 
   };
 
   const handleRunLocalSeederEngine = async () => {
-    if (userRole !== 'Master_Dev') { alert("Clearance Error: Master Dev credentials required."); return; }
+    if (userRole !== 'Head_Dev') { alert("Clearance Error: Master Dev credentials required."); return; }
     const secureKeyInput = prompt("SECURITY OVERWRITE CHECK: Enter Master Developer Password to execute 3,000+ items matrix seeder:");
     if (secureKeyInput !== 'J4sp3r#M1sty') { alert("Access Denied: Invalid Security Passkey."); return; }
 
@@ -84,7 +84,7 @@ export default function DevToolsDashboard({ userRole }: DevToolsDashboardProps) 
   };
 
   const handleWipeEntireDatabaseExceptStaff = async () => {
-    if (userRole !== 'Master_Dev') { alert("Clearance Error: Master Dev credentials required."); return; }
+    if (userRole !== 'Head_Dev') { alert("Clearance Error: Master Dev credentials required."); return; }
     const secureKeyInput = prompt("SECURITY OVERWRITE CHECK: Enter Master Developer Password to proceed with absolute wipe:");
     if (secureKeyInput !== 'J4sp3r#M1sty') { alert("Access Denied: Invalid Security Passkey."); return; }
 
@@ -168,7 +168,7 @@ export default function DevToolsDashboard({ userRole }: DevToolsDashboardProps) 
             <div className="flex items-center justify-between border-b pb-1.5"><span>Firebase Latency:</span><span className={`font-black ${!latencyPing ? 'text-slate-400' : latencyPing > 250 ? 'text-amber-500' : 'text-emerald-600'}`}>{latencyPing ? `${latencyPing} MS` : 'PING...'}</span></div>
             <div className="flex items-center justify-between pt-0.5"><span>Threat Profile:</span><span className={`font-black ${isLockedDown ? 'text-rose-600' : 'text-slate-900'}`}>{isLockedDown ? 'LOCKDOWN ACTIVE' : 'CLEAR'}</span></div>
           </div>
-          {userRole === 'Master_Dev' && (
+          {userRole === 'Head_Dev' && (
             <div className="space-y-2 pt-2 border-t text-[9px] uppercase tracking-wider font-extrabold flex flex-col">
               <button type="button" onClick={handleRunLocalSeederEngine} className="w-full p-2 bg-teal-600 text-white font-black uppercase rounded-xl flex items-center justify-center gap-1 cursor-pointer hover:bg-teal-700 transition"><Zap className="w-3 h-3" /> Populate 3,000+ Items</button>
               <button type="button" onClick={handleWipeEntireDatabaseExceptStaff} className="w-full p-2 bg-rose-600 text-white font-black uppercase rounded-xl flex items-center justify-center gap-1 cursor-pointer hover:bg-rose-700 transition"><ShieldAlert className="w-3 h-3" /> Wipe All Data</button>

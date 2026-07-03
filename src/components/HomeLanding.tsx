@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, serverTimestamp, getDoc, setDoc, onSnapshot, getDocs, query, where, increment } from 'firebase/firestore';
 import { Megaphone, CheckSquare, BookOpen, Clock, User, Check, Play, AlertCircle } from 'lucide-react';
 
 interface HomeLandingProps {
@@ -11,6 +11,7 @@ interface HomeLandingProps {
   loggedInEmail: string;
   newsFeed: any[];
   tasksList: any[];
+  users: any[];
 }
 
 export default function HomeLanding({
@@ -20,22 +21,128 @@ export default function HomeLanding({
   userRole,
   loggedInEmail,
   newsFeed,
-  tasksList
+  tasksList,
+  users
 }: HomeLandingProps) {
   // Input tracking states for content creation
   const [newAnnouncement, setNewAnnouncement] = useState('');
   const [newTaskName, setNewTaskName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [trainingModules, setTrainingModules] = useState<any[]>([]);
 
   // Filter out and sort your live data streams
   const isAdminOrDev = userRole === 'Admin' || userRole === 'admin' || userRole === 'Dev' || userRole === 'dev';
   const sortedNews = [...newsFeed].sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
   
-  const activeTaskPool = tasksList.filter(t => t.status === 'unassigned');
-  const myClaimedTasks = tasksList.filter(t => t.status === 'claimed' && t.assignedTo === loggedInEmail);
+  // Personalized news: logged-in email, role, or Everyone
+  const personalizedNews = sortedNews.filter((n) => {
+    if (!n) return false;
+    const roles = Array.isArray(n.targetRoles) ? n.targetRoles : [];
+    const users = Array.isArray(n.targetUsers) ? n.targetUsers : [];
+    if (users.includes(loggedInEmail)) return true;
+    if (roles.includes(userRole) || roles.includes('Everyone')) return true;
+    return roles.length === 0 && users.length === 0;
+  });
+
+  // Task pool filtered by current user email, role, or Everyone
+  const activeTaskPool = tasksList.filter((t) => {
+    if (t.status !== 'unassigned') return false;
+    const roles = Array.isArray(t.roles) ? t.roles : [];
+    const users = Array.isArray(t.targetUsers) ? t.targetUsers : [];
+    if (users.includes(loggedInEmail)) return true;
+    if (roles.includes(userRole) || roles.includes('Everyone')) return true;
+    return roles.length === 0 && users.length === 0;
+  });
+  const myClaimedTasks = tasksList.filter((t) => t.status === 'claimed' && t.assignedTo === loggedInEmail);
+
+  // Training module system
+  const [lessonsCompleted, setLessonsCompleted] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!loggedInEmail) return;
+    const loadProgress = async () => {
+      try {
+        const docRef = doc(db, 'training_progress', loggedInEmail);
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          setLessonsCompleted(Array.isArray(data.lessonsCompleted) ? data.lessonsCompleted : []);
+        }
+      } catch (err) { console.error('Failed to load training progress', err); }
+    };
+    loadProgress();
+  }, [loggedInEmail]);
+
+  useEffect(() => {
+    const unsubTraining = onSnapshot(collection(db, 'training_modules'), (snapshot) => {
+      const items: any[] = [];
+      snapshot.forEach((doc) => items.push({ id: doc.id, ...doc.data() }));
+      setTrainingModules(items.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+    });
+
+    return () => { unsubTraining(); };
+  }, []);
+
+  const visibleTrainingModules = trainingModules.filter((module) => {
+    if (lessonsCompleted.includes(module.id)) return false;
+    if (isAdminOrDev) return true;
+    const roles = Array.isArray(module.roles) ? module.roles : [];
+    const users = Array.isArray(module.targetUsers) ? module.targetUsers : [];
+    if (users.includes(loggedInEmail)) return true;
+    if (roles.includes(userRole) || roles.includes('Everyone')) return true;
+    return roles.length === 0 && users.length === 0;
+  });
+
+  const trainingItems = visibleTrainingModules;
+
+  // Training counts for the logged-in user (completed / total assigned)
+  const modulesForUser = trainingModules.filter((module) => {
+    if (isAdminOrDev) return true;
+    const roles = Array.isArray(module.roles) ? module.roles : [];
+    const users = Array.isArray(module.targetUsers) ? module.targetUsers : [];
+    if (users.includes(loggedInEmail)) return true;
+    if (roles.includes(userRole) || roles.includes('Everyone')) return true;
+    return roles.length === 0 && users.length === 0;
+  });
+  const completedTrainingCount = modulesForUser.filter((m) => lessonsCompleted.includes(m.id)).length;
+  const totalTrainingCount = modulesForUser.length;
+  const trainingPercent = totalTrainingCount === 0 ? 0 : Math.round((completedTrainingCount / totalTrainingCount) * 100);
+
+  const handleCompleteLesson = async (lessonId: string) => {
+    try {
+      if (!loggedInEmail) return;
+      // Prevent double-counting: only increment when lesson wasn't already completed
+      const alreadyDone = lessonsCompleted.includes(lessonId);
+      const next = Array.from(new Set([...lessonsCompleted, lessonId]));
+      setLessonsCompleted(next);
+      await setDoc(doc(db, 'training_progress', loggedInEmail), { lessonsCompleted: next, updatedAt: serverTimestamp() }, { merge: true });
+
+      if (!alreadyDone) {
+        // Increment user's trainingComplete counter
+        const assignedEmail = loggedInEmail.toString().trim().toLowerCase();
+        const matchedUser = (users || []).find((u) => {
+          const email = (u?.email || '').toString().trim().toLowerCase();
+          return email === assignedEmail || u?.id === loggedInEmail;
+        });
+
+        if (matchedUser?.id) {
+          await updateDoc(doc(db, 'users', matchedUser.id), { trainingComplete: increment(1) });
+        } else {
+          // Fallback: lookup by email in users collection
+          const userQuery = query(collection(db, 'users'), where('email', '==', assignedEmail));
+          const userSnapshot = await getDocs(userQuery);
+          userSnapshot.forEach((userDoc) => {
+            updateDoc(userDoc.ref, { trainingComplete: increment(1) }).catch((err) => console.error('Failed to increment trainingComplete for fallback user lookup', err));
+          });
+        }
+      }
+    } catch (err) { console.error('Failed to persist lesson completion', err); }
+  };
 
   // Total hardware calculations for the ledger cards
   const totalStockUnits = inventory.reduce((acc, item) => acc + (Number(item.quantity) || 0), 0);
+  const completedTaskCount = (users || []).reduce((acc, u) => acc + (Number((u && u.taskComplete) || 0)), 0);
+  const usersCount = users.length;
 
   const handlePostAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,11 +191,37 @@ export default function HomeLanding({
 
   const handleCompleteTask = async (taskId: string) => {
     try {
+      const task = tasksList.find((t) => t.id === taskId);
+      if (!task) {
+        console.warn('Complete task failed: task not found', taskId);
+        return;
+      }
+
+      const assignedUserEmail = (task.assignedTo || '').toString().trim().toLowerCase();
+      if (assignedUserEmail) {
+        const matchedUser = users.find((u) => {
+          const email = (u.email || '').toString().trim().toLowerCase();
+          return email === assignedUserEmail || u.id === task.assignedTo;
+        });
+
+        if (matchedUser?.id) {
+          await updateDoc(doc(db, 'users', matchedUser.id), {
+            taskComplete: increment(1)
+          });
+        } else {
+          const userQuery = query(collection(db, 'users'), where('email', '==', assignedUserEmail));
+          const userSnapshot = await getDocs(userQuery);
+          userSnapshot.forEach((userDoc) => {
+            updateDoc(userDoc.ref, { taskComplete: increment(1) }).catch((err) => console.error('Failed to increment taskComplete for fallback user lookup', err));
+          });
+        }
+      }
+
       await updateDoc(doc(db, 'tasks', taskId), {
         status: 'completed',
         completedAt: serverTimestamp()
       });
-    } catch (err) { console.error("Sign-off write failed:", err); }
+    } catch (err) { console.error('Sign-off write failed:', err); }
   };
 
   return (
@@ -96,17 +229,36 @@ export default function HomeLanding({
       
       {/* 🏷️ MASTER DATA SUMMARY TRACK CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border rounded-2xl p-5 shadow-xs"><span className="block text-[10px] text-slate-400 uppercase font-mono font-bold tracking-wider">Garments Stocked</span><span className="block text-2xl font-black text-brand-primary mt-1">{totalStockUnits} Units</span></div>
-        <div className="bg-white border rounded-2xl p-5 shadow-xs"><span className="block text-[10px] text-slate-400 uppercase font-mono font-bold tracking-wider">Active Folders</span><span className="block text-2xl font-black text-slate-800 mt-1">{categories.length} Nodes</span></div>
-        <div className="bg-white border rounded-2xl p-5 shadow-xs"><span className="block text-[10px] text-slate-400 uppercase font-mono font-bold tracking-wider">Campus Registries</span><span className="block text-2xl font-black text-slate-800 mt-1">{schools.length} Profiles</span></div>
-        <div className="bg-white border rounded-2xl p-5 shadow-xs"><span className="block text-[10px] text-slate-400 uppercase font-mono font-bold tracking-wider">Radar Sync</span><span className="block text-xs font-black text-emerald-600 uppercase font-mono tracking-widest mt-4 flex items-center gap-1.5"><span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block animate-pulse" /> Live Flow</span></div>
+        <div className="bg-white border rounded-2xl p-5 shadow-xs">
+          <span className="block text-[10px] text-slate-400 uppercase font-mono font-bold tracking-wider">Garments Stocked</span>
+          <span className="block text-2xl font-black text-brand-primary mt-1">{totalStockUnits} Units</span>
+        </div>
+        <div className="bg-white border rounded-2xl p-5 shadow-xs">
+          <span className="block text-[10px] text-slate-400 uppercase font-mono font-bold tracking-wider">Completed Tasks</span>
+          <span className="block text-2xl font-black text-slate-800 mt-1">{completedTaskCount}</span>
+        </div>
+        <div className="bg-white border rounded-2xl p-5 shadow-xs">
+          <span className="block text-[10px] text-slate-400 uppercase font-mono font-bold tracking-wider">Training Modules Complete</span>
+          <span className="block text-2xl font-black text-slate-800 mt-1">{completedTrainingCount}/{totalTrainingCount} {trainingPercent}%</span>
+        </div>
+        <div className="bg-white border rounded-2xl p-5 shadow-xs">
+          <span className="block text-[10px] text-slate-400 uppercase font-mono font-bold tracking-wider">Connected User</span>
+          <div className="mt-3 space-y-2 text-slate-700 text-[12px]">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+              <span className="font-black uppercase tracking-[0.2em] text-emerald-700">Connected</span>
+            </div>
+            <div className="text-slate-500">{loggedInEmail || 'No email available'}</div>
+            <div className="text-slate-500">{userRole || 'No role assigned'}</div>
+          </div>
+        </div>
       </div>
 
       {/* 📢 CONTAINER 1: THE DYNAMIC ADMINISTRATIVE NEWS FEED */}
       <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs border-t-4 border-brand-teal space-y-4">
         <div className="flex items-center gap-2 pb-2 border-b">
           <Megaphone className="w-5 h-5 text-brand-teal shrink-0" />
-          <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Admin News Update Feed</h3>
+          <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">News Feed</h3>
         </div>
 
         {isAdminOrDev && (
@@ -117,7 +269,7 @@ export default function HomeLanding({
         )}
 
         <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 scrollbar-none">
-          {sortedNews.map((news) => (
+          {personalizedNews.map((news) => (
             <div key={news.id} className="p-3 bg-slate-50 border rounded-xl flex items-start gap-2.5 text-xs">
               <div className="w-2 h-2 rounded-full bg-brand-orange mt-1.5 shrink-0" />
               <div className="space-y-0.5 flex-1">
@@ -126,7 +278,7 @@ export default function HomeLanding({
               </div>
             </div>
           ))}
-          {sortedNews.length === 0 && <p className="text-xs text-slate-400 italic py-2">No updates broadcasted onto the wire yet.</p>}
+          {personalizedNews.length === 0 && <p className="text-xs text-slate-400 italic py-2">No updates for you right now.</p>}
         </div>
       </div>
       {/* 📋 CONTAINER 2: DYNAMIC TASK POOL & VOLUNTARY ASSIGNMENT LOGIC */}
@@ -137,7 +289,7 @@ export default function HomeLanding({
           <div className="flex items-center justify-between border-b pb-2">
             <div className="flex items-center gap-2">
               <CheckSquare className="w-5 h-5 text-brand-primary shrink-0" />
-              <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Unassigned Task Pool</h3>
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Unassigned Tasks</h3>
             </div>
             <span className="text-[10px] font-mono bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">{activeTaskPool.length} Open</span>
           </div>
@@ -149,7 +301,7 @@ export default function HomeLanding({
             </form>
           )}
 
-          <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1 scrollbar-none">
+            <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1 scrollbar-none">
             {activeTaskPool.map((task) => (
               <div key={task.id} className="p-3 bg-white border border-slate-100 rounded-xl flex items-center justify-between gap-3 shadow-xs hover:border-slate-300 transition">
                 <span className="text-xs font-bold text-slate-800 truncate">{task.taskName}</span>
@@ -164,7 +316,7 @@ export default function HomeLanding({
         <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4 text-left">
           <div className="flex items-center gap-2 border-b pb-2">
             <User className="w-5 h-5 text-slate-800 shrink-0" />
-            <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">My Active Tracked Task</h3>
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Your Active Tasks</h3>
           </div>
 
           <div className="flex flex-col items-center justify-center min-h-[140px] space-y-3">
@@ -192,12 +344,42 @@ export default function HomeLanding({
       <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4 w-full">
         <div className="flex items-center gap-2 pb-2 border-b">
           <BookOpen className="w-5 h-5 text-slate-800 shrink-0" />
-          <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Warehouse Academy Manual</h3>
+          <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">UniformEX Training Manual</h3>
         </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">UniformEX Training Manual</h3>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-medium">
-          <div className="p-3.5 bg-slate-50 border rounded-xl space-y-1.5"><span className="block font-black text-slate-900 uppercase tracking-wider text-[10px] text-brand-primary">📘 1. Stocking In Intake</span><p className="text-slate-500 leading-relaxed text-[11px]">Expand Management and register custom category blue-prints before sorting box item counts into stock shelves.</p></div>
-          <div className="p-3.5 bg-slate-50 border rounded-xl space-y-1.5"><span className="block font-black text-slate-900 uppercase tracking-wider text-[10px] text-brand-primary">🔍 2. Tracking Location Prefixes</span><p className="text-slate-500 leading-relaxed text-[11px]">Always cross-verify physical warehouse tags. Fixed Shelf routes row lines, while UO marks Under-Office bulk containers.</p></div>
-          <div className="p-3.5 bg-slate-50 border rounded-xl space-y-1.5"><span className="block font-black text-slate-900 uppercase tracking-wider text-[10px] text-brand-primary">⚙️ 3. Operational Sign-Off</span><p className="text-slate-500 leading-relaxed text-[11px]">Claim an active task card from the tracking pool, run the physical audit on row bins, then hit sign-off inside your tray profile.</p></div>
+          {trainingItems.length > 0 ? trainingItems.map((lesson: any) => {
+            const done = lessonsCompleted.includes(lesson.id);
+            const roleNames = Array.isArray(lesson.roles) ? lesson.roles.join(', ') : 'All roles';
+            return (
+              <div key={lesson.id} className={`p-3.5 border rounded-xl space-y-1.5 ${done ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50'}`}>
+                <div className="flex items-center justify-between">
+                  <span className="block font-black text-slate-900 uppercase tracking-wider text-[10px] text-brand-primary">{lesson.title}</span>
+                  <span className="text-[10px] font-mono text-slate-500">{lesson.duration || 'n/a'}</span>
+                </div>
+                <p className="text-slate-500 leading-relaxed text-[11px]">
+                  {lesson.description || 'Training module description not provided.'}
+                </p>
+                {Array.isArray(lesson.roles) && lesson.roles.length > 0 && (
+                  <div className="text-[10px] text-slate-500">Target roles: {roleNames}</div>
+                )}
+                <div className="pt-2">
+                  {!done ? (
+                    <button onClick={() => handleCompleteLesson(lesson.id)} className="py-2 px-3 bg-brand-primary text-white rounded-lg text-xs font-black">Mark Complete</button>
+                  ) : (
+                    <button disabled className="py-2 px-3 bg-emerald-600 text-white rounded-lg text-xs font-black">Completed</button>
+                  )}
+                </div>
+              </div>
+            );
+          }) : (
+            <div className="col-span-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 text-xs">No active training modules are available for your role or email at this time.</div>
+          )}
         </div>
       </div>
 

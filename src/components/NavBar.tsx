@@ -141,7 +141,7 @@ export default function NavBar({
               <button onClick={() => handleSelectStaticPage('staff')} className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === 'staff' ? 'bg-amber-400 text-slate-900' : 'text-white hover:bg-white/10'}`}>
                 <Users className="w-3.5 h-3.5 text-white/60" /><span>Manage Staff</span>
               </button>
-              {(userRole === 'Dev' || userRole === 'Master_Dev') && (
+              {(userRole === 'Dev' || userRole === 'Head_Dev') && (
                 <button onClick={() => handleSelectStaticPage('dev')} className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === 'dev' ? 'bg-amber-400 text-slate-900' : 'text-white hover:bg-white/10'}`}>
                   <Terminal className="w-3.5 h-3.5 text-white/60" /><span>Dev Tools</span>
                 </button>

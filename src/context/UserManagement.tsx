@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { Search, Trash2, User, Settings, Filter, Plus, X } from 'lucide-react';
 
 interface UserManagementProps {
@@ -15,6 +15,25 @@ export default function UserManagement({ userRole }: UserManagementProps) {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [newRoleName, setNewRoleName] = useState('');
 
+  const [trainingModules, setTrainingModules] = useState<any[]>([]);
+  const [activeSection, setActiveSection] = useState<'directory' | 'roles' | 'training' | 'create_task' | 'publish_news'>('directory');
+  const [newTrainingTitle, setNewTrainingTitle] = useState('');
+  const [newTrainingDescription, setNewTrainingDescription] = useState('');
+  const [newTrainingDuration, setNewTrainingDuration] = useState('5m');
+  const [newTrainingRoles, setNewTrainingRoles] = useState<string[]>([]);
+  const [newTrainingUsers, setNewTrainingUsers] = useState('');
+  const [newTrainingAsNews, setNewTrainingAsNews] = useState(false);
+  const [newTrainingAsTask, setNewTrainingAsTask] = useState(false);
+
+  // Separate forms state for news and tasks
+  const [newsMessage, setNewsMessage] = useState('');
+  const [newsTargetRoles, setNewsTargetRoles] = useState<string[]>([]);
+  const [newsTargetUsers, setNewsTargetUsers] = useState('');
+
+  const [taskNameInput, setTaskNameInput] = useState('');
+  const [taskRolesInput, setTaskRolesInput] = useState<string[]>([]);
+  const [taskAssignedToInput, setTaskAssignedToInput] = useState('');
+
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [editRole, setEditRole] = useState('');
   const [editStatus, setEditStatus] = useState('');
@@ -26,7 +45,10 @@ export default function UserManagement({ userRole }: UserManagementProps) {
     const unsubRoles = onSnapshot(collection(db, 'roles'), (snap) => {
       setRoles(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
-    return () => { unsubUsers(); unsubRoles(); };
+    const unsubTraining = onSnapshot(collection(db, 'training_modules'), (snap) => {
+      setTrainingModules(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => { unsubUsers(); unsubRoles(); unsubTraining(); };
   }, []);
 
   const handleApprove = async (userId: string) => {
@@ -40,10 +62,73 @@ export default function UserManagement({ userRole }: UserManagementProps) {
     setNewRoleName('');
   };
 
+  const handleAddTrainingModule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTrainingTitle.trim() || !newTrainingDescription.trim()) return;
+    const moduleData = {
+      title: newTrainingTitle.trim(),
+      description: newTrainingDescription.trim(),
+      duration: newTrainingDuration.trim() || '5m',
+      roles: newTrainingRoles,
+      users: newTrainingUsers.split(',').map((u) => u.trim().toLowerCase()).filter(Boolean),
+      active: true,
+      createdAt: new Date()
+    };
+    const docRef = await addDoc(collection(db, 'training_modules'), moduleData);
+    // training module created; publishing news or creating tasks is done via separate forms
+    setNewTrainingTitle('');
+    setNewTrainingDescription('');
+    setNewTrainingDuration('5m');
+    setNewTrainingRoles([]);
+    setNewTrainingUsers('');
+    setNewTrainingAsNews(false);
+    setNewTrainingAsTask(false);
+    showNotification('success', 'Training module created successfully.');
+  };
+
+  const handleDeleteTrainingModule = async (moduleId: string) => {
+    await deleteDoc(doc(db, 'training_modules', moduleId));
+    showNotification('success', 'Training module removed.');
+  };
+
+  const showNotification = (type: 'success' | 'error', message: string) => {
+    if (typeof (window as any).showNotification === 'function') {
+      (window as any).showNotification(type, message);
+      return;
+    }
+    alert(message);
+  };
+
   const handleOpenEdit = (user: any) => {
     setEditingUser(user);
     setEditRole(user.role || 'Staff');
     setEditStatus(user.status || 'Pending');
+  };
+
+  // View user details (tasks & training)
+  const [viewUser, setViewUser] = useState<any | null>(null);
+  const [viewUserTasks, setViewUserTasks] = useState<any[]>([]);
+  const [viewUserProgress, setViewUserProgress] = useState<string[]>([]);
+
+  const handleOpenUserView = async (user: any) => {
+    setViewUser(user);
+    try {
+      const email = (user.email || '').toString().trim().toLowerCase();
+      // load tasks assigned to this user
+      const tasksQ = query(collection(db, 'tasks'), where('assignedTo', '==', email));
+      const tasksSnap = await getDocs(tasksQ);
+      setViewUserTasks(tasksSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+      // load training progress
+      const progRef = doc(db, 'training_progress', email);
+      const progSnap = await getDoc(progRef);
+      if (progSnap.exists()) {
+        const data = progSnap.data();
+        setViewUserProgress(Array.isArray(data.lessonsCompleted) ? data.lessonsCompleted : []);
+      } else {
+        setViewUserProgress([]);
+      }
+    } catch (err) { console.error('Failed to load user view details', err); }
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
@@ -67,87 +152,255 @@ export default function UserManagement({ userRole }: UserManagementProps) {
   return (
     <div className="w-full text-left font-sans pl-2 pr-6 py-4 space-y-6 relative select-none animate-fadeIn">
       <div>
-        <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">Manage Staff</h2>
-        <p className="text-[11px] font-medium text-slate-400 mt-1">Oversee user configurations, modify system role hierarchy authority levels, and handle pending approvals.</p>
+        <h2 className="text-sm font-black text-teal-800 uppercase tracking-wider flex items-center gap-1.5">Manage Staff</h2>
+        <p className="text-[11px] font-medium text-amber-700 mt-1">Oversee user configurations, modify system role hierarchy authority levels, and handle pending approvals.</p>
       </div>
 
-      <div className="bg-white border p-4 rounded-xl flex flex-wrap gap-3 items-center shadow-sm">
-        <Search className="w-5 h-5 text-slate-400" />
-        <input type="text" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="flex-1 min-w-[200px] p-2 border rounded-lg text-sm focus:outline-none focus:border-slate-400" />
-        <Filter className="w-5 h-5 text-slate-400 ml-4 hidden sm:block" />
-        <select onChange={(e) => setRoleFilter(e.target.value)} className="p-2 border rounded-lg min-w-[120px] text-sm bg-white">
-          <option value="ALL">All Roles</option>
-          {sortedRoles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
-        </select>
-        <select onChange={(e) => setStatusFilter(e.target.value)} className="p-2 border rounded-lg min-w-[120px] text-sm bg-white">
-          <option value="ALL">All Status</option>
-          <option value="Active">Active</option>
-          <option value="Pending">Pending</option>
-          <option value="Suspended">Suspended</option>
-        </select>
+      <div className="flex flex-wrap gap-2 bg-amber-50 p-3 rounded-3xl border border-amber-200">
+        {['directory', 'roles', 'training', 'create_task', 'publish_news'].map((section) => (
+          <button
+            key={section}
+            type="button"
+            onClick={() => setActiveSection(section as any)}
+            className={`px-4 py-2 text-xs font-bold rounded-full transition ${activeSection === section ? 'bg-orange-500 text-white shadow-sm shadow-orange-200' : 'bg-amber-100 text-slate-700 hover:bg-amber-200'}`}
+          >
+            {section === 'directory' ? 'Staff Directory' : section === 'roles' ? 'Role Manager' : section === 'training' ? 'Training Modules' : section === 'create_task' ? 'Create Task' : 'Publish News'}
+          </button>
+        ))}
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-6 items-start w-full">
-        {/* Role Manager */}
-        <div className="w-full lg:w-80 shrink-0">
-          <div className="bg-white border rounded-xl p-5 shadow-sm">
-            <h4 className="font-bold uppercase mb-1 flex items-center gap-2 text-slate-900 text-sm"><Settings size={16}/> Role Manager</h4>
+      {activeSection === 'directory' && (
+        <>
+          <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex flex-wrap gap-3 items-center shadow-sm mt-3">
+            <Search className="w-5 h-5 text-teal-700" />
+            <input type="text" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="flex-1 min-w-[200px] p-2 border border-amber-200 rounded-lg text-sm focus:outline-none focus:border-teal-500" />
+            <Filter className="w-5 h-5 text-teal-700 ml-4 hidden sm:block" />
+            <select onChange={(e) => setRoleFilter(e.target.value)} className="p-2 border border-amber-200 rounded-lg min-w-[120px] text-sm bg-white text-slate-700">
+              <option value="ALL">All Roles</option>
+              {sortedRoles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+            </select>
+            <select onChange={(e) => setStatusFilter(e.target.value)} className="p-2 border border-amber-200 rounded-lg min-w-[120px] text-sm bg-white text-slate-700">
+              <option value="ALL">All Status</option>
+              <option value="Active">Active</option>
+              <option value="Pending">Pending</option>
+              <option value="Suspended">Suspended</option>
+            </select>
+          </div>
+
+          <div className="mt-4">
+            <div className="flex-1 flex flex-wrap gap-6 justify-start items-start w-full mt-4">
+              {filteredUsers.map(user => {
+                const targetUserRoleObj = roles.find(r => r.name.toLowerCase() === user.role?.toLowerCase());
+                const targetUserWeight = targetUserRoleObj ? Number(targetUserRoleObj.weight || 0) : 0;
+                const canEdit = currentUserWeight > targetUserWeight;
+                const isClickable = currentUserWeight > 10;
+
+                return (
+                  <div key={user.id} className={`bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col gap-4 w-full sm:w-[380px] shrink-0`}>
+                    <div onClick={() => isClickable && handleOpenUserView(user)} className={`border-[1.5px] border-black bg-white p-3 flex gap-4 relative ${isClickable ? 'cursor-pointer hover:shadow-md' : ''}`}>
+                      <div className="w-24 h-32 border-4 border-[#e25822] bg-orange-50 shrink-0 flex items-center justify-center">
+                        <User className="w-12 h-12 text-[#e25822]" />
+                      </div>
+                      <div className="flex flex-col justify-between flex-1 py-1">
+                        <div className="flex gap-3 items-start"><img src="/The_King's_Awardlogo.png" className="w-14 h-14 object-contain" alt="K" /><img src="/Uniform_Exchange.png" className="w-20 h-12 object-contain mt-1" alt="UE" /></div>
+                        <div className="flex flex-col mt-2"><h5 className="font-extrabold text-[22px] text-[#3ca4d8] truncate">{user.displayName}</h5>
+                        <p className="text-[#e25822] font-bold text-[15px]">{user.role}</p></div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest mr-auto">{user.status}</span>
+                      {(user.status === 'Pending' || user.status === 'Suspended') && canEdit && (
+                        <button onClick={() => handleApprove(user.id)} className="bg-emerald-50 text-emerald-600 px-3 py-2 rounded-lg font-black text-[11px] uppercase">Approve</button>
+                      )}
+                      <button onClick={() => canEdit && handleOpenEdit(user)} className="bg-slate-100 text-slate-700 px-3 py-2 rounded-lg font-black text-[11px] uppercase">Edit</button>
+                      <button onClick={() => canEdit && window.confirm('Delete?') && deleteDoc(doc(db, 'users', user.id))} className="bg-rose-50 text-rose-600 px-3 py-2 rounded-lg"><Trash2 size={16} /></button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+
+      {activeSection === 'create_task' && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 shadow-sm mt-3">
+          <h3 className="text-lg font-bold text-teal-800">Create Task</h3>
+          <p className="text-sm text-amber-700 mt-1">Create an operational task and assign to roles or users.</p>
+          <div className="mt-4">
+            <div className="bg-amber-100 border border-amber-200 rounded-2xl p-4">
+              <form onSubmit={async (e) => { e.preventDefault(); if (!taskNameInput.trim()) return; await addDoc(collection(db, 'tasks'), { taskName: taskNameInput.trim(), status: 'unassigned', assignedTo: taskAssignedToInput.trim().toLowerCase() || '', roles: taskRolesInput, createdAt: serverTimestamp(), completedAt: null }); setTaskNameInput(''); setTaskAssignedToInput(''); setTaskRolesInput([]); showNotification('success', 'Task created.'); }}>
+                <input value={taskNameInput} onChange={(e) => setTaskNameInput(e.target.value)} placeholder="Task name" className="w-full p-2 border border-amber-200 rounded-md text-sm mb-2" />
+                <select multiple value={taskRolesInput} onChange={(e) => setTaskRolesInput(Array.from(e.target.selectedOptions, o => o.value))} className="w-full p-2 border border-amber-200 rounded-md text-sm mb-2 bg-white" size={6}>
+                  <option key="everyone" value="Everyone">Everyone</option>
+                  {sortedRoles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                </select>
+                <input value={taskAssignedToInput} onChange={(e) => setTaskAssignedToInput(e.target.value)} placeholder="Assign to (email, optional)" className="w-full p-2 border border-amber-200 rounded-md text-sm mb-2" />
+                <button type="submit" className="w-full bg-orange-500 text-white p-2 rounded-md text-sm">Create Task</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeSection === 'publish_news' && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 shadow-sm mt-3">
+          <h3 className="text-lg font-bold text-teal-800">Publish News</h3>
+          <p className="text-sm text-amber-700 mt-1">Broadcast an announcement to roles or specific users.</p>
+          <div className="mt-4">
+            <div className="bg-amber-100 border border-amber-200 rounded-2xl p-4">
+              <form onSubmit={async (e) => { e.preventDefault(); if (!newsMessage.trim()) return; await addDoc(collection(db, 'news_feed'), { message: newsMessage.trim(), postedBy: 'System', targetRoles: newsTargetRoles, targetUsers: newsTargetUsers.split(',').map(u => u.trim().toLowerCase()).filter(Boolean), createdAt: serverTimestamp() }); setNewsMessage(''); setNewsTargetRoles([]); setNewsTargetUsers(''); showNotification('success', 'News published.'); }}>
+                <textarea value={newsMessage} onChange={(e) => setNewsMessage(e.target.value)} placeholder="News message..." className="w-full p-2 border border-amber-200 rounded-md text-sm mb-2" />
+                <select multiple value={newsTargetRoles} onChange={(e) => setNewsTargetRoles(Array.from(e.target.selectedOptions, o => o.value))} className="w-full p-2 border border-amber-200 rounded-md text-sm mb-2 bg-white" size={6}>
+                  <option value="Everyone">Everyone</option>
+                  {sortedRoles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                </select>
+                <input value={newsTargetUsers} onChange={(e) => setNewsTargetUsers(e.target.value)} placeholder="Comma-separated user emails" className="w-full p-2 border border-amber-200 rounded-md text-sm mb-2" />
+                <button type="submit" className="w-full bg-orange-500 text-white p-2 rounded-md text-sm">Publish News</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeSection === 'roles' && (
+        <div className="w-full lg:w-80 shrink-0 mt-4">
+          <div className="bg-teal-50 border border-teal-200 rounded-xl p-5 shadow-sm">
+            <h4 className="font-bold uppercase mb-1 flex items-center gap-2 text-teal-800 text-sm"><Settings size={16}/> Role Manager</h4>
             <div className="space-y-1 mb-4 max-h-60 overflow-y-auto pr-1">
               {sortedRoles.map(r => {
                 const canEditRole = currentUserWeight > Number(r.weight || 0);
                 return (
                   <div key={r.id} className="flex justify-between items-center py-2 border-b last:border-0">
-                    <span className="text-sm font-bold text-slate-700">{r.name}</span>
-                    <input type="number" defaultValue={r.weight} disabled={!canEditRole} className={`w-12 border rounded p-1 text-center text-sm ${canEditRole ? 'bg-white' : 'bg-slate-50'}`}
+                    <span className="text-sm font-bold text-teal-700">{r.name}</span>
+                    <input type="number" defaultValue={r.weight} disabled={!canEditRole} className={`w-12 border rounded p-1 text-center text-sm ${canEditRole ? 'bg-white border-teal-200' : 'bg-slate-50 border-slate-200'}`}
                       onBlur={(e) => {
                         const newWeight = Number(e.target.value);
-                        if (newWeight < currentUserWeight) updateDoc(doc(db, 'roles', r.id), { weight: newWeight });
-                        else { e.target.value = String(r.weight); alert("Security: Cannot assign weight >= your own."); }
-                      }} 
+                        if (newWeight <= currentUserWeight) updateDoc(doc(db, 'roles', r.id), { weight: newWeight });
+                        else { e.target.value = String(r.weight); alert("Security: Cannot assign weight > your own."); }
+                      }}
                     />
                   </div>
                 );
               })}
             </div>
-            <form onSubmit={handleAddRole} className="flex gap-2 pt-4 border-t border-slate-100">
-              <input type="text" placeholder="New Role..." value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} className="flex-1 p-2 border rounded-lg text-sm" />
-              <button type="submit" className="bg-slate-900 text-white p-2 rounded-lg"><Plus size={18} /></button>
+            <form onSubmit={handleAddRole} className="flex gap-2 pt-4 border-t border-teal-100">
+              <input type="text" placeholder="New Role..." value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} className="flex-1 p-2 border border-teal-200 rounded-lg text-sm" />
+              <button type="submit" className="bg-orange-500 text-white p-2 rounded-lg"><Plus size={18} /></button>
             </form>
           </div>
         </div>
+      )}
 
-        {/* Staff ID Badges */}
-        <div className="flex-1 flex flex-wrap gap-6 justify-start items-start w-full">
-          {filteredUsers.map(user => {
-            const targetUserRoleObj = roles.find(r => r.name.toLowerCase() === user.role?.toLowerCase());
-            const targetUserWeight = targetUserRoleObj ? Number(targetUserRoleObj.weight || 0) : 0;
-            const canEdit = currentUserWeight > targetUserWeight;
+      {activeSection === 'training' && (
+        <div className="space-y-6">
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-teal-800">Training Modules</h3>
+                <p className="text-sm text-amber-700 mt-1">Create training assignments, publish announcements, and assign tasks to staff roles or users.</p>
+              </div>
+              <span className="text-xs uppercase tracking-[0.2em] text-teal-700">{trainingModules.length} modules</span>
+            </div>
 
-            return (
-              <div key={user.id} className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col gap-4 w-full sm:w-[380px] shrink-0">
-                <div className="border-[1.5px] border-black bg-white p-3 flex gap-4 relative">
-                  <div className="w-24 h-32 border-4 border-[#e25822] bg-orange-50 shrink-0 flex items-center justify-center">
-                    <User className="w-12 h-12 text-[#e25822]" />
+            <form onSubmit={handleAddTrainingModule} className="grid gap-4 lg:grid-cols-[1.4fr_0.9fr]">
+              <div className="space-y-4">
+                <label className="block text-sm font-semibold text-teal-800">
+                  Module Title
+                  <input value={newTrainingTitle} onChange={(e) => setNewTrainingTitle(e.target.value)} className="mt-2 w-full p-3 border border-amber-200 rounded-2xl text-sm" placeholder="Enter module title" />
+                </label>
+                <label className="block text-sm font-semibold text-teal-800">
+                  Description
+                  <textarea value={newTrainingDescription} onChange={(e) => setNewTrainingDescription(e.target.value)} className="mt-2 w-full p-3 border border-amber-200 rounded-2xl text-sm min-h-[120px]" placeholder="Outline the training goals and steps" />
+                </label>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <label className="block text-sm font-semibold text-teal-800">
+                    Duration
+                    <input value={newTrainingDuration} onChange={(e) => setNewTrainingDuration(e.target.value)} className="mt-2 w-full p-3 border border-amber-200 rounded-2xl text-sm" placeholder="e.g. 10m" />
+                  </label>
+                  <label className="block text-sm font-semibold text-teal-800">
+                    Target Roles
+                    <select multiple value={newTrainingRoles} onChange={(e) => setNewTrainingRoles(Array.from(e.target.selectedOptions, (option) => option.value))} className="mt-2 w-full p-3 border border-amber-200 rounded-2xl text-sm min-h-[120px] bg-white" size={4}>
+                      <option key="everyone" value="Everyone">Everyone</option>
+                      {sortedRoles.map((r) => (
+                        <option key={r.id} value={r.name}>{r.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <label className="block text-sm font-semibold text-teal-800">
+                  Target Users
+                  <input value={newTrainingUsers} onChange={(e) => setNewTrainingUsers(e.target.value)} className="mt-2 w-full p-3 border border-amber-200 rounded-2xl text-sm" placeholder="Comma-separated emails or IDs" />
+                </label>
+              </div>
+
+              <div className="space-y-4">
+                <button type="submit" className="w-full bg-orange-500 text-white rounded-2xl py-3 text-sm font-bold">Add Training Module</button>
+              </div>
+            </form>
+          </div>
+
+          <div className="bg-teal-50 border border-teal-200 rounded-2xl p-5 shadow-sm">
+            <h4 className="text-sm font-bold uppercase tracking-[0.18em] text-teal-800 mb-4">Existing Modules</h4>
+            <div className="space-y-4">
+              {trainingModules.length > 0 ? trainingModules.map((module) => (
+                <div key={module.id} className="border rounded-2xl p-4 bg-amber-50">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                    <div className="space-y-2">
+                      <p className="text-sm font-bold text-teal-900">{module.title}</p>
+                      <p className="text-sm text-teal-700">{module.description}</p>
+                    </div>
+                    <button type="button" onClick={() => window.confirm('Delete this training module?') && handleDeleteTrainingModule(module.id)} className="self-start rounded-full bg-teal-100 px-3 py-2 text-teal-700 text-sm font-semibold">Delete</button>
                   </div>
-                  <div className="flex flex-col justify-between flex-1 py-1">
-                    <div className="flex gap-3 items-start"><img src="/The_King's_Awardlogo.png" className="w-14 h-14 object-contain" alt="K" /><img src="/Uniform_Exchange.png" className="w-20 h-12 object-contain mt-1" alt="UE" /></div>
-                    <div className="flex flex-col mt-2"><h5 className="font-extrabold text-[22px] text-[#3ca4d8] truncate">{user.displayName}</h5>
-                    <p className="text-[#e25822] font-bold text-[15px]">{user.role}</p></div>
+                  <div className="grid gap-2 sm:grid-cols-3 text-xs text-teal-600 mt-3">
+                    <span>Duration: {module.duration || 'N/A'}</span>
+                    <span>Roles: {(module.roles || []).join(', ') || 'All'}</span>
+                    <span>Users: {(module.users || []).join(', ') || 'All'}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest mr-auto">{user.status}</span>
-                  {(user.status === 'Pending' || user.status === 'Suspended') && canEdit && (
-                    <button onClick={() => handleApprove(user.id)} className="bg-emerald-50 text-emerald-600 px-3 py-2 rounded-lg font-black text-[11px] uppercase">Approve</button>
-                  )}
-                  <button onClick={() => canEdit && handleOpenEdit(user)} className="bg-slate-100 text-slate-700 px-3 py-2 rounded-lg font-black text-[11px] uppercase">Edit</button>
-                  <button onClick={() => canEdit && window.confirm('Delete?') && deleteDoc(doc(db, 'users', user.id))} className="bg-rose-50 text-rose-600 px-3 py-2 rounded-lg"><Trash2 size={16} /></button>
+              )) : (
+                <p className="text-sm text-teal-700">No training modules have been created yet. Use the form above to add one.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewUser && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl border p-6 w-full max-w-2xl shadow-xl overflow-auto max-h-[80vh]">
+            <div className="flex items-start justify-between">
+              <h3 className="font-extrabold text-lg">{viewUser.displayName}'s Tasks & Training</h3>
+              <button onClick={() => setViewUser(null)} className="text-slate-500">Close</button>
+            </div>
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <h4 className="font-bold text-sm mb-2">Assigned Tasks</h4>
+                <div className="space-y-2">
+                  {viewUserTasks.length > 0 ? viewUserTasks.map(t => (
+                    <div key={t.id} className="p-3 border rounded-lg bg-slate-50">
+                      <div className="font-bold text-sm">{t.taskName}</div>
+                      <div className="text-xs text-slate-500">Status: {t.status}</div>
+                    </div>
+                  )) : <div className="text-xs text-slate-400">No tasks assigned.</div>}
                 </div>
               </div>
-            );
-          })}
+              <div>
+                <h4 className="font-bold text-sm mb-2">Training Progress</h4>
+                <div className="text-xs text-slate-500">Completed lessons: {viewUserProgress.length}</div>
+                <div className="mt-2 space-y-2">
+                  {trainingModules.map((mod) => (
+                    <div key={mod.id} className={`p-2 border rounded ${viewUserProgress.includes(mod.id) ? 'bg-emerald-50 border-emerald-100' : 'bg-white'}`}>
+                      <div className="font-medium text-sm">{mod.title}</div>
+                      <div className="text-[11px] text-slate-500">{mod.description}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {editingUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -155,7 +408,7 @@ export default function UserManagement({ userRole }: UserManagementProps) {
             <h3 className="font-extrabold text-lg mb-4">Edit User</h3>
             <form onSubmit={handleSaveEdit} className="space-y-4">
               <select value={editRole} onChange={(e) => setEditRole(e.target.value)} className="w-full p-2 border rounded-xl text-sm">
-                {sortedRoles.filter(r => Number(r.weight || 0) < currentUserWeight).map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                {sortedRoles.filter(r => Number(r.weight || 0) <= currentUserWeight).map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
               </select>
               <select value={editStatus} onChange={(e) => setEditStatus(e.target.value)} className="w-full p-2 border rounded-xl text-sm">
                 <option value="Active">Active</option>
