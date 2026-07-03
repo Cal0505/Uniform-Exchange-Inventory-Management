@@ -192,8 +192,9 @@ export default function UserManagement({ userRole }: UserManagementProps) {
               {filteredUsers.map(user => {
                 const targetUserRoleObj = roles.find(r => r.name.toLowerCase() === user.role?.toLowerCase());
                 const targetUserWeight = targetUserRoleObj ? Number(targetUserRoleObj.weight || 0) : 0;
-                const canEdit = currentUserWeight > targetUserWeight;
-                const isClickable = currentUserWeight > 10;
+                const isHeadDev = userRole === 'Head_Dev';
+                const canEdit = isHeadDev || currentUserWeight > targetUserWeight;
+                const isClickable = isHeadDev || currentUserWeight > 10;
 
                 return (
                   <div key={user.id} className={`bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col gap-4 w-full sm:w-[380px] shrink-0`}>
@@ -269,15 +270,19 @@ export default function UserManagement({ userRole }: UserManagementProps) {
             <h4 className="font-bold uppercase mb-1 flex items-center gap-2 text-teal-800 text-sm"><Settings size={16}/> Role Manager</h4>
             <div className="space-y-1 mb-4 max-h-60 overflow-y-auto pr-1">
               {sortedRoles.map(r => {
-                const canEditRole = currentUserWeight > Number(r.weight || 0);
+                const canEditRole = userRole === 'Head_Dev' || currentUserWeight > Number(r.weight || 0);
                 return (
                   <div key={r.id} className="flex justify-between items-center py-2 border-b last:border-0">
                     <span className="text-sm font-bold text-teal-700">{r.name}</span>
                     <input type="number" defaultValue={r.weight} disabled={!canEditRole} className={`w-12 border rounded p-1 text-center text-sm ${canEditRole ? 'bg-white border-teal-200' : 'bg-slate-50 border-slate-200'}`}
                       onBlur={(e) => {
                         const newWeight = Number(e.target.value);
-                        if (newWeight <= currentUserWeight) updateDoc(doc(db, 'roles', r.id), { weight: newWeight });
-                        else { e.target.value = String(r.weight); alert("Security: Cannot assign weight > your own."); }
+                        if (userRole === 'Head_Dev' || newWeight <= currentUserWeight) {
+                          updateDoc(doc(db, 'roles', r.id), { weight: newWeight });
+                        } else {
+                          e.target.value = String(r.weight);
+                          alert("Security: Cannot assign weight > your own.");
+                        }
                       }}
                     />
                   </div>
@@ -370,8 +375,31 @@ export default function UserManagement({ userRole }: UserManagementProps) {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl border p-6 w-full max-w-2xl shadow-xl overflow-auto max-h-[80vh]">
             <div className="flex items-start justify-between">
-              <h3 className="font-extrabold text-lg">{viewUser.displayName}'s Tasks & Training</h3>
+              <div>
+                <h3 className="font-extrabold text-lg">{viewUser.displayName || 'Staff Member'}</h3>
+                <p className="text-sm text-slate-500">Tasks, training, and profile details for the selected staff member.</p>
+              </div>
               <button onClick={() => setViewUser(null)} className="text-slate-500">Close</button>
+            </div>
+            <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.24em] text-slate-400">Name</p>
+                  <p className="text-sm font-semibold text-slate-700">{viewUser.displayName || 'No name available'}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.24em] text-slate-400">Email</p>
+                  <p className="text-sm text-slate-700">{viewUser.email || 'No email provided'}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.24em] text-slate-400">Role</p>
+                  <p className="text-sm text-slate-700">{viewUser.role || 'Staff'}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full bg-teal-100 px-3 py-1 text-[11px] font-semibold text-teal-700">{viewUser.status || 'Pending'}</span>
+                {viewUser.phone && <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-700">{viewUser.phone}</span>}
+              </div>
             </div>
             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -408,7 +436,7 @@ export default function UserManagement({ userRole }: UserManagementProps) {
             <h3 className="font-extrabold text-lg mb-4">Edit User</h3>
             <form onSubmit={handleSaveEdit} className="space-y-4">
               <select value={editRole} onChange={(e) => setEditRole(e.target.value)} className="w-full p-2 border rounded-xl text-sm">
-                {sortedRoles.filter(r => Number(r.weight || 0) <= currentUserWeight).map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                {sortedRoles.filter(r => userRole === 'Head_Dev' || Number(r.weight || 0) <= currentUserWeight).map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
               </select>
               <select value={editStatus} onChange={(e) => setEditStatus(e.target.value)} className="w-full p-2 border rounded-xl text-sm">
                 <option value="Active">Active</option>

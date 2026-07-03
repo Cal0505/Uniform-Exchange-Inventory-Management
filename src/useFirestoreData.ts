@@ -16,6 +16,7 @@ export function useFirestoreData() {
   // 🎯 RENAMED FROM schoolClassifications TO schoolTypes REFS PER CLOUD MIGRATION
   const [schoolTypes, setSchoolTypes] = useState<any[]>([]);
   
+  const [roles, setRoles] = useState<any[]>([]);
   const [itemTypes, setItemTypes] = useState<ItemType[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -68,6 +69,11 @@ export function useFirestoreData() {
       setItemTypes(items.sort((a, b) => a.name.localeCompare(b.name)));
     }, safeError('itemTypes'));
 
+    const unsubRoles = onSnapshot(collection(db, 'roles'), (snap) => {
+      const items: any[] = []; snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
+      setRoles(items);
+    }, safeError('roles'));
+
     const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
       const items: any[] = []; snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
       setUsers(items);
@@ -87,13 +93,13 @@ export function useFirestoreData() {
     return () => {
       unsubSchools(); unsubTypes(); unsubSizes(); unsubColours();
       unsubLocations(); unsubCategories(); unsubSchoolTypes(); 
-      unsubItemTypes(); unsubUsers(); unsubTickets(); unsubInventory();
+      unsubItemTypes(); unsubRoles(); unsubUsers(); unsubTickets(); unsubInventory();
     };
   }, []);
 
   // 🎯 SAFELY EXPORTS ALL ARRAYS WITH THE CORRECT NEW NAMING BLUEPRINT
   return { 
     schools, clothingTypes, sizes, colours, locations, categories, 
-    schoolTypes, itemTypes, inventory, users, developer_tickets, loading, seeding 
+    schoolTypes, roles, itemTypes, inventory, users, developer_tickets, loading, seeding 
   };
 }

@@ -108,6 +108,12 @@ export default function HomeLanding({
   const totalTrainingCount = modulesForUser.length;
   const trainingPercent = totalTrainingCount === 0 ? 0 : Math.round((completedTrainingCount / totalTrainingCount) * 100);
 
+  const handleViewModule = (lessonId: string) => {
+    const lesson = trainingItems.find((item) => item.id === lessonId);
+    if (!lesson) return;
+    alert(`Viewing module: ${lesson.title || 'Untitled'}\n\n${lesson.description || 'No details available.'}`);
+  };
+
   const handleCompleteLesson = async (lessonId: string) => {
     try {
       if (!loggedInEmail) return;
@@ -141,7 +147,14 @@ export default function HomeLanding({
 
   // Total hardware calculations for the ledger cards
   const totalStockUnits = inventory.reduce((acc, item) => acc + (Number(item.quantity) || 0), 0);
-  const completedTaskCount = (users || []).reduce((acc, u) => acc + (Number((u && u.taskComplete) || 0)), 0);
+  const currentUserRecord = (users || []).find((u) => {
+    const userEmail = (u?.email || '').toString().trim().toLowerCase();
+    const loggedEmail = (loggedInEmail || '').toString().trim().toLowerCase();
+    return userEmail === loggedEmail || u?.id === loggedInEmail;
+  });
+  const completedTaskCount = currentUserRecord
+    ? Number(currentUserRecord.taskComplete || 0)
+    : tasksList.filter((t) => t.status === 'completed' && (t.assignedTo || '').toString().trim().toLowerCase() === (loggedInEmail || '').toString().trim().toLowerCase()).length;
   const usersCount = users.length;
 
   const handlePostAnnouncement = async (e: React.FormEvent) => {
@@ -227,7 +240,7 @@ export default function HomeLanding({
   return (
     <div className="space-y-6 text-left animate-fadeIn font-sans w-full max-w-5xl">
       
-      {/* 🏷️ MASTER DATA SUMMARY TRACK CARDS */}
+      {/* 🏷️User Tracking*/}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white border rounded-2xl p-5 shadow-xs">
           <span className="block text-[10px] text-slate-400 uppercase font-mono font-bold tracking-wider">Garments Stocked</span>
@@ -294,13 +307,6 @@ export default function HomeLanding({
             <span className="text-[10px] font-mono bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">{activeTaskPool.length} Open</span>
           </div>
 
-          {isAdminOrDev && (
-            <form onSubmit={handleCreateTask} className="flex gap-2 w-full">
-              <input type="text" placeholder="Formulate a new operational task..." value={newTaskName} onChange={(e) => setNewTaskName(e.target.value)} className="flex-1 p-2.5 border rounded-xl text-xs" disabled={isSubmitting} />
-              <button type="submit" className="py-2.5 px-4 bg-brand-primary text-white text-xs font-black rounded-xl cursor-pointer" disabled={isSubmitting}>Issue</button>
-            </form>
-          )}
-
             <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1 scrollbar-none">
             {activeTaskPool.map((task) => (
               <div key={task.id} className="p-3 bg-white border border-slate-100 rounded-xl flex items-center justify-between gap-3 shadow-xs hover:border-slate-300 transition">
@@ -346,11 +352,6 @@ export default function HomeLanding({
           <BookOpen className="w-5 h-5 text-slate-800 shrink-0" />
           <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">UniformEX Training Manual</h3>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">UniformEX Training Manual</h3>
-          </div>
-        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-medium">
           {trainingItems.length > 0 ? trainingItems.map((lesson: any) => {
@@ -370,7 +371,7 @@ export default function HomeLanding({
                 )}
                 <div className="pt-2">
                   {!done ? (
-                    <button onClick={() => handleCompleteLesson(lesson.id)} className="py-2 px-3 bg-brand-primary text-white rounded-lg text-xs font-black">Mark Complete</button>
+                    <button onClick={() => handleViewModule(lesson.id)} className="py-2 px-3 bg-brand-primary text-white rounded-lg text-xs font-black">View Module</button>
                   ) : (
                     <button disabled className="py-2 px-3 bg-emerald-600 text-white rounded-lg text-xs font-black">Completed</button>
                   )}

@@ -125,24 +125,38 @@ function MainApp() {
     id: a.id, name: a.name, label: a.label, skuCode: a.skuCode || '', ruleProfile: a.ruleProfile
   }));
 
+  const currentUserRoleObj = (dataPool.roles || []).find((r: any) => (r.name || '').toLowerCase() === userRole?.toLowerCase());
+  const currentUserWeight = currentUserRoleObj ? Number(currentUserRoleObj.weight || 0) : 0;
+  const isHeadDev = userRole === 'Head_Dev';
+  const canSeeManagement = isHeadDev || currentUserWeight >= 5;
+  const canSeeAdmin = isHeadDev || currentUserWeight >= 5;
+  const canSeeFullAccess = isHeadDev || currentUserWeight >= 10;
+
+  const effectiveMainTab = activeMainTab === 'management_view' && !canSeeManagement ? null
+    : activeMainTab === 'staff' && !canSeeAdmin ? null
+    : activeMainTab === 'statistics' && !canSeeAdmin ? null
+    : activeMainTab === 'dev' && !canSeeFullAccess ? null
+    : activeMainTab;
+
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex flex-col xl:flex-row font-sans antialiased text-[#54595F] w-full">
       <NavBar 
         categories={dataPool.categories || []} activeMainTab={activeMainTab} setActiveMainTab={setActiveMainTab}
         activeSubTab={activeSubTab} setActiveSubTab={setActiveSubTab} currentViewedCategory={currentViewedCategory}
         setCurrentViewedCategory={setCurrentViewedCategory} userRole={userRole} userName={userName} loggedInEmail={user.email || ''}
+        currentUserWeight={currentUserWeight}
         handleSignOut={handleSignOut} isFirebaseConnected={isFirebaseConnected} loading={!!dataPool.loading}
       />
       <main className="flex-1 p-4 md:p-8 xl:pl-72 overflow-x-hidden w-full">
-        {activeMainTab === null && <HomeLanding categories={dataPool.categories || []} schools={mappedSchools} inventory={dataPool.inventory || []} userRole={userRole} loggedInEmail={user.email || ''} newsFeed={newsFeed} tasksList={tasksList} users={dataPool.users || []} />}
-        {activeMainTab === 'inventory_view' && <Inventory currentViewedCategory={currentViewedCategory} categories={dataPool.categories || []} schools={mappedSchools} clothingTypes={mapAttribute(dataPool.clothingTypes)} sizes={mapAttribute(dataPool.sizes)} colours={mapAttribute(dataPool.colours)} locations={mapAttribute(dataPool.locations)} inventory={dataPool.inventory || []} />}
-        {activeMainTab === 'management_view' && <Management schools={mappedSchools} clothingTypes={mapAttribute(dataPool.clothingTypes)} sizes={mapAttribute(dataPool.sizes)} colours={mapAttribute(dataPool.colours)} locations={mapAttribute(dataPool.locations)} categories={dataPool.categories || []} schoolTypes={dataPool.schoolTypes || []} userRole={userRole} activeTab={activeSubTab} setActiveTab={setActiveSubTab} />}
-        {activeMainTab === 'staff' && <AdminTabContainer schools={mappedSchools as any} clothingTypes={mapAttribute(dataPool.clothingTypes) as any} sizes={mapAttribute(dataPool.sizes) as any} colours={mapAttribute(dataPool.colours) as any} locations={mapAttribute(dataPool.locations) as any} categories={dataPool.categories || []} itemTypes={[]} schoolTypes={dataPool.schoolTypes || []} userRole={userRole} forcedSubTabOverride="staff" />}
+        {effectiveMainTab === null && <HomeLanding categories={dataPool.categories || []} schools={mappedSchools} inventory={dataPool.inventory || []} userRole={userRole} loggedInEmail={user.email || ''} newsFeed={newsFeed} tasksList={tasksList} users={dataPool.users || []} />}
+        {effectiveMainTab === 'inventory_view' && <Inventory currentViewedCategory={currentViewedCategory} categories={dataPool.categories || []} schools={mappedSchools} clothingTypes={mapAttribute(dataPool.clothingTypes)} sizes={mapAttribute(dataPool.sizes)} colours={mapAttribute(dataPool.colours)} locations={mapAttribute(dataPool.locations)} inventory={dataPool.inventory || []} />}
+        {effectiveMainTab === 'management_view' && <Management schools={mappedSchools} clothingTypes={mapAttribute(dataPool.clothingTypes)} sizes={mapAttribute(dataPool.sizes)} colours={mapAttribute(dataPool.colours)} locations={mapAttribute(dataPool.locations)} categories={dataPool.categories || []} schoolTypes={dataPool.schoolTypes || []} userRole={userRole} activeTab={activeSubTab} setActiveTab={setActiveSubTab} />}
+        {effectiveMainTab === 'staff' && <AdminTabContainer schools={mappedSchools as any} clothingTypes={mapAttribute(dataPool.clothingTypes) as any} sizes={mapAttribute(dataPool.sizes) as any} colours={mapAttribute(dataPool.colours) as any} locations={mapAttribute(dataPool.locations) as any} categories={dataPool.categories || []} itemTypes={[]} schoolTypes={dataPool.schoolTypes || []} userRole={userRole} forcedSubTabOverride="staff" />}
         
-        {activeMainTab === 'dev' && <AdminTabContainer schools={[]} clothingTypes={[]} sizes={[]} colours={[]} locations={[]} categories={[]} itemTypes={[]} schoolTypes={[]} userRole={userRole} forcedSubTabOverride="dev" />}
-        {activeMainTab === 'statistics' && <StatsDashboard inventory={dataPool.inventory || []} schools={mappedSchools || []} locations={dataPool.locations || []} />}
+        {effectiveMainTab === 'dev' && <AdminTabContainer schools={[]} clothingTypes={[]} sizes={[]} colours={[]} locations={[]} categories={[]} itemTypes={[]} schoolTypes={[]} userRole={userRole} forcedSubTabOverride="dev" />}
+        {effectiveMainTab === 'statistics' && <StatsDashboard inventory={dataPool.inventory || []} schools={mappedSchools || []} locations={dataPool.locations || []} />}
         
-        {activeMainTab === 'account' && <AccountPage userEmail={user.email || ''} userRole={userRole} />}
+        {effectiveMainTab === 'account' && <AccountPage userEmail={user.email || ''} userRole={userRole} />}
       </main>
     </div>
   );

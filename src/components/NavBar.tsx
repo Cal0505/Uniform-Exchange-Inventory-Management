@@ -26,6 +26,7 @@ interface NavBarProps {
   userRole: string;
   userName: string;
   loggedInEmail: string;
+  currentUserWeight: number;
   handleSignOut: () => void;
   isFirebaseConnected: boolean;
   loading: boolean;
@@ -42,6 +43,7 @@ export default function NavBar({
   userRole,
   userName,
   loggedInEmail,
+  currentUserWeight,
   handleSignOut,
   isFirebaseConnected,
   loading
@@ -53,6 +55,11 @@ export default function NavBar({
   const [adminExpanded, setAdminExpanded] = useState(false);
 
   const sortedCategories = [...categories].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const isHeadDev = userRole === 'Head_Dev';
+  const canSeeManagement = isHeadDev || currentUserWeight >= 5;
+  const canSeeAdmin = isHeadDev || currentUserWeight >= 5;
+  const canSeeStatistics = isHeadDev || currentUserWeight >= 5;
+  const canSeeDevTools = isHeadDev || currentUserWeight >= 10;
   
   const handleSelectCategoryPage = (catId: string) => {
     setActiveMainTab('inventory_view');
@@ -110,48 +117,52 @@ export default function NavBar({
         </div>
 
         {/* Management Drawer */}
-        <div className="space-y-1">
-          <button onClick={() => setManagementExpanded(!managementExpanded)} className={`w-full py-2.5 px-3 flex items-center justify-between rounded-full border transition cursor-pointer duration-200 ${managementExpanded ? 'bg-white/15 text-white border-white/10 shadow-xs font-black' : 'bg-white/5 text-white/70 border-transparent hover:bg-white/10 hover:text-white'}`}>
-            <div className="flex items-center gap-2"><Wrench className={`w-4 h-4 ${managementExpanded ? 'text-amber-400' : 'text-white/80'}`} /><span className="uppercase text-[10px] tracking-widest font-extrabold">Management</span></div>
-            {managementExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-          </button>
-          {managementExpanded && (
-            <div className="pl-4 border-l border-white/10 ml-5 space-y-1 pt-1 animate-fadeIn">
-              {NAV_ITEMS.map((sub) => {
-                const SubIcon = sub.icon;
-                return (
-                  <button key={sub.id} onClick={() => handleSelectManagementPage(sub.id)} className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === 'management_view' && activeSubTab === sub.id ? 'bg-amber-400 text-slate-900 shadow-sm' : 'text-white hover:bg-white/10'}`}>
-                    <SubIcon className={`w-3.5 h-3.5 ${activeMainTab === 'management_view' && activeSubTab === sub.id ? 'text-slate-900' : 'text-white/60'}`} />
-                    <span className="truncate">{sub.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        {canSeeManagement && (
+          <div className="space-y-1">
+            <button onClick={() => setManagementExpanded(!managementExpanded)} className={`w-full py-2.5 px-3 flex items-center justify-between rounded-full border transition cursor-pointer duration-200 ${managementExpanded ? 'bg-white/15 text-white border-white/10 shadow-xs font-black' : 'bg-white/5 text-white/70 border-transparent hover:bg-white/10 hover:text-white'}`}>
+              <div className="flex items-center gap-2"><Wrench className={`w-4 h-4 ${managementExpanded ? 'text-amber-400' : 'text-white/80'}`} /><span className="uppercase text-[10px] tracking-widest font-extrabold">Management</span></div>
+              {managementExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+            </button>
+            {managementExpanded && (
+              <div className="pl-4 border-l border-white/10 ml-5 space-y-1 pt-1 animate-fadeIn">
+                {NAV_ITEMS.map((sub) => {
+                  const SubIcon = sub.icon;
+                  return (
+                    <button key={sub.id} onClick={() => handleSelectManagementPage(sub.id)} className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === 'management_view' && activeSubTab === sub.id ? 'bg-amber-400 text-slate-900 shadow-sm' : 'text-white hover:bg-white/10'}`}>
+                      <SubIcon className={`w-3.5 h-3.5 ${activeMainTab === 'management_view' && activeSubTab === sub.id ? 'text-slate-900' : 'text-white/60'}`} />
+                      <span className="truncate">{sub.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Admin Drawer */}
-        <div className="space-y-1">
-          <button onClick={() => setAdminExpanded(!adminExpanded)} className={`w-full py-2.5 px-3 flex items-center justify-between rounded-full border transition cursor-pointer duration-200 ${adminExpanded ? 'bg-white/15 text-white border-white/10 shadow-xs font-black' : 'bg-white/5 text-white/70 border-transparent hover:bg-white/10 hover:text-white'}`}>
-            <div className="flex items-center gap-2"><Settings className={`w-4 h-4 ${adminExpanded ? 'text-amber-400' : 'text-white/80'}`} /><span className="uppercase text-[10px] tracking-widest font-extrabold">Admin</span></div>
-            {adminExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-          </button>
-          {adminExpanded && (
-            <div className="pl-4 border-l border-white/10 ml-5 space-y-1 pt-1 animate-fadeIn">
-              <button onClick={() => handleSelectStaticPage('staff')} className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === 'staff' ? 'bg-amber-400 text-slate-900' : 'text-white hover:bg-white/10'}`}>
-                <Users className="w-3.5 h-3.5 text-white/60" /><span>Manage Staff</span>
-              </button>
-              {(userRole === 'Dev' || userRole === 'Head_Dev') && (
-                <button onClick={() => handleSelectStaticPage('dev')} className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === 'dev' ? 'bg-amber-400 text-slate-900' : 'text-white hover:bg-white/10'}`}>
-                  <Terminal className="w-3.5 h-3.5 text-white/60" /><span>Dev Tools</span>
+        {canSeeAdmin && (
+          <div className="space-y-1">
+            <button onClick={() => setAdminExpanded(!adminExpanded)} className={`w-full py-2.5 px-3 flex items-center justify-between rounded-full border transition cursor-pointer duration-200 ${adminExpanded ? 'bg-white/15 text-white border-white/10 shadow-xs font-black' : 'bg-white/5 text-white/70 border-transparent hover:bg-white/10 hover:text-white'}`}>
+              <div className="flex items-center gap-2"><Settings className={`w-4 h-4 ${adminExpanded ? 'text-amber-400' : 'text-white/80'}`} /><span className="uppercase text-[10px] tracking-widest font-extrabold">Admin</span></div>
+              {adminExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+            </button>
+            {adminExpanded && (
+              <div className="pl-4 border-l border-white/10 ml-5 space-y-1 pt-1 animate-fadeIn">
+                <button onClick={() => handleSelectStaticPage('staff')} className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === 'staff' ? 'bg-amber-400 text-slate-900' : 'text-white hover:bg-white/10'}`}>
+                  <Users className="w-3.5 h-3.5 text-white/60" /><span>Manage Staff</span>
                 </button>
-              )}
-              <button onClick={() => handleSelectStaticPage('statistics')} className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === 'statistics' ? 'bg-amber-400 text-slate-900' : 'text-white hover:bg-white/10'}`}>
-                <BarChart3 className="w-3.5 h-3.5 text-white/60" /><span>Statistics</span>
-              </button>
-            </div>
-          )}
-        </div>
+                {(userRole === 'Dev' || userRole === 'Head_Dev') && canSeeDevTools && (
+                  <button onClick={() => handleSelectStaticPage('dev')} className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === 'dev' ? 'bg-amber-400 text-slate-900' : 'text-white hover:bg-white/10'}`}>
+                    <Terminal className="w-3.5 h-3.5 text-white/60" /><span>Dev Tools</span>
+                  </button>
+                )}
+                <button onClick={() => handleSelectStaticPage('statistics')} className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === 'statistics' ? 'bg-amber-400 text-slate-900' : 'text-white hover:bg-white/10'}`}>
+                  <BarChart3 className="w-3.5 h-3.5 text-white/60" /><span>Statistics</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="relative mt-4 flex-shrink-0 w-full">

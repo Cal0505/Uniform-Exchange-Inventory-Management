@@ -1,7 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc, onSnapshot } from 'firebase/firestore';
 import { Shield, User, Mail, Lock, Check } from 'lucide-react';
+
+interface TrainingModule {
+  id: string;
+  title?: string;
+  description?: string;
+  duration?: string;
+  roles?: string[];
+  targetUsers?: string[];
+}
 
 interface AccountPageProps { userEmail: string; userRole: string; }
 
@@ -13,6 +22,22 @@ export default function AccountPage({ userEmail, userRole }: AccountPageProps) {
   const [status, setStatus] = useState('');
   const [userDocId, setUserDocId] = useState('');
   const [saving, setSaving] = useState(false);
+  const [trainingModules, setTrainingModules] = useState<TrainingModule[]>([]);
+  const [lessonsCompleted, setLessonsCompleted] = useState<string[]>([]);
+
+  const normalizedEmail = (userEmail || '').toLowerCase().trim();
+  const eligibleTrainingModules = trainingModules.filter((module) => {
+    const roles = Array.isArray(module.roles) ? module.roles : [];
+    const users = Array.isArray(module.targetUsers) ? module.targetUsers.map((u) => u.toString().toLowerCase().trim()) : [];
+    if (users.includes(normalizedEmail)) return true;
+    if (roles.includes(userRole) || roles.includes('Everyone')) return true;
+    return roles.length === 0 && users.length === 0;
+  });
+  const completedModules = eligibleTrainingModules.filter((mod) => lessonsCompleted.includes(mod.id));
+  const currentModules = eligibleTrainingModules.filter((mod) => !lessonsCompleted.includes(mod.id));
+  const completedTrainingCount = completedModules.length;
+  const totalTrainingCount = eligibleTrainingModules.length;
+  const trainingProgressPercent = totalTrainingCount === 0 ? 0 : Math.round((completedTrainingCount / totalTrainingCount) * 100);
 
   // FETCH LIVE DATA MATCHING USER SESSION FROM FIRESTORE ON MOUNT
   useEffect(() => {
@@ -31,6 +56,32 @@ export default function AccountPage({ userEmail, userRole }: AccountPageProps) {
       }
     };
     fetchLiveProfile();
+  }, [userEmail]);
+
+  useEffect(() => {
+    if (!userEmail) return;
+    const normalizedEmail = userEmail.toLowerCase().trim();
+
+    const unsubModules = onSnapshot(collection(db, 'training_modules'), (snap) => {
+      const items: TrainingModule[] = [];
+      snap.forEach((doc) => items.push({ id: doc.id, ...doc.data() } as TrainingModule));
+      setTrainingModules(items.sort((a, b) => (b.duration || '').localeCompare(a.duration || '')));
+    });
+
+    const progressDoc = doc(db, 'training_progress', normalizedEmail);
+    const unsubProgress = onSnapshot(progressDoc, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setLessonsCompleted(Array.isArray(data.lessonsCompleted) ? data.lessonsCompleted : []);
+      } else {
+        setLessonsCompleted([]);
+      }
+    });
+
+    return () => {
+      unsubModules();
+      unsubProgress();
+    };
   }, [userEmail]);
 
   // CORE WRITE ACTION: PUSH MODIFICATIONS LIVE TO CLOUD DOCUMENT
@@ -131,6 +182,111 @@ export default function AccountPage({ userEmail, userRole }: AccountPageProps) {
           <span>{saving ? 'Saving...' : 'Save Account Modifications'}</span>
         </button>
       </form>
+
+      <section className="mt-8 bg-slate-50 border border-slate-200 rounded-3xl p-6 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Training Record</h2>
+            <p className="text-sm text-slate-500 mt-1">Your current training progress and modules waiting for completion.</p>
+          </div>
+          <div className="rounded-3xl bg-white border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 shadow-sm">
+            {completedTrainingCount}/{totalTrainingCount} completed · {trainingProgressPercent}%
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="space-y-4">
+            <div className="bg-white border border-slate-200 rounded-3xl p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.24em] text-slate-400 font-semibold">Current Training Record</p>
+                  <h3 className="text-base font-black text-slate-900 mt-1">Completed Modules</h3>
+                </div>
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">{completedTrainingCount}</span>
+              </div>
+              {completedModules.length > 0 ? (
+                <div className="space-y-3">
+                  {completedModules.map((mod) => (
+                    <div key={mod.id} className="rounded-2xl border border-slate-200 bg-emerald-50 p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="font-bold text-slate-900">{mod.title || 'Untitled Module'}</p>
+                          <p className="text-xs text-slate-500 mt-1">{mod.description || 'No description provided.'}</p>
+                        </div>
+                        <span className="text-[11px] uppercase tracking-[0.25em] text-slate-500">{mod.duration || 'n/a'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">You have not completed any training modules yet.</p>
+              )}
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-3xl p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.24em] text-slate-400 font-semibold">Assigned Modules</p>
+                  <h3 className="text-base font-black text-slate-900 mt-1">Work In Progress</h3>
+                </div>
+                <span className="text-xs font-bold text-slate-700 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">{currentModules.length} open</span>
+              </div>
+              {currentModules.length > 0 ? (
+                <div className="space-y-3">
+                  {currentModules.map((mod) => (
+                    <div key={mod.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="font-bold text-slate-900">{mod.title || 'Untitled Module'}</p>
+                          <p className="text-xs text-slate-500 mt-1">{mod.description || 'No description available.'}</p>
+                        </div>
+                        <span className="text-[11px] uppercase tracking-[0.25em] text-slate-500">{mod.duration || 'n/a'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">No active training modules are currently assigned to you.</p>
+              )}
+            </div>
+          </div>
+
+          <aside className="space-y-4">
+            <div className="bg-white border border-slate-200 rounded-3xl p-4">
+              <p className="text-xs uppercase tracking-[0.24em] text-slate-400 font-semibold">Your Training Summary</p>
+              <div className="mt-4 space-y-3 text-sm text-slate-600">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">Training Modules</span>
+                  <span>{totalTrainingCount}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">Completed</span>
+                  <span>{completedTrainingCount}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">Remaining</span>
+                  <span>{currentModules.length}</span>
+                </div>
+                <div className="pt-3">
+                  <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                    <div className="h-full rounded-full bg-emerald-500" style={{ width: `${trainingProgressPercent}%` }} />
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-2">Progress toward your completed training record.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-900 text-white rounded-3xl p-4 space-y-3">
+              <p className="text-xs uppercase tracking-[0.24em] font-semibold text-slate-300">Training Tips</p>
+              <ul className="text-sm space-y-2 list-disc list-inside text-slate-200">
+                <li>Finish your next module to keep your compliance on track.</li>
+                <li>Open training is prioritized by role and target assignment.</li>
+                <li>Reach out to your supervisor if a module appears missing.</li>
+              </ul>
+            </div>
+          </aside>
+        </div>
+      </section>
     </div>
   );
 }
