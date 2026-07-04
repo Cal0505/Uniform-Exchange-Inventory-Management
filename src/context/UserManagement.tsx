@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp, getDoc, getDocs, query, where } from 'firebase/firestore';
-import { Search, Trash2, User, Settings, Filter, Plus, X } from 'lucide-react';
+import { Search, Trash2, User, Settings, Filter, Plus, X, Edit2 } from 'lucide-react';
 
-interface UserManagementProps {
-  userRole: string;
-}
+interface Slide { text: string; imageUrl: string; }
+interface UserManagementProps { userRole: string; }
 
 export default function UserManagement({ userRole }: UserManagementProps) {
   const [usersList, setUsersList] = useState<any[]>([]);
@@ -17,13 +16,27 @@ export default function UserManagement({ userRole }: UserManagementProps) {
 
   const [trainingModules, setTrainingModules] = useState<any[]>([]);
   const [activeSection, setActiveSection] = useState<'directory' | 'roles' | 'training' | 'create_task' | 'publish_news'>('directory');
+  
+  // New structured training fields
+  const [moduleNumber, setModuleNumber] = useState<number | ''>('');
+  const [moduleLetter, setModuleLetter] = useState('');
   const [newTrainingTitle, setNewTrainingTitle] = useState('');
   const [newTrainingDescription, setNewTrainingDescription] = useState('');
+  const [newTrainingSlides, setNewTrainingSlides] = useState<Slide[]>([{ text: '', imageUrl: '' }]);
   const [newTrainingDuration, setNewTrainingDuration] = useState('5m');
   const [newTrainingRoles, setNewTrainingRoles] = useState<string[]>([]);
   const [newTrainingUsers, setNewTrainingUsers] = useState('');
-  const [newTrainingAsNews, setNewTrainingAsNews] = useState(false);
-  const [newTrainingAsTask, setNewTrainingAsTask] = useState(false);
+
+  // Editing Training Module State
+  const [editingModule, setEditingModule] = useState<any | null>(null);
+  const [editModuleNumber, setEditModuleNumber] = useState<number | ''>('');
+  const [editModuleLetter, setEditModuleLetter] = useState('');
+  const [editModuleTitle, setEditModuleTitle] = useState('');
+  const [editModuleDescription, setEditModuleDescription] = useState('');
+  const [editSlides, setEditSlides] = useState<Slide[]>([]);
+  const [editModuleDuration, setEditModuleDuration] = useState('');
+  const [editModuleRoles, setEditModuleRoles] = useState<string[]>([]);
+  const [editModuleUsers, setEditModuleUsers] = useState('');
 
   // Separate forms state for news and tasks
   const [newsMessage, setNewsMessage] = useState('');
@@ -37,6 +50,25 @@ export default function UserManagement({ userRole }: UserManagementProps) {
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [editRole, setEditRole] = useState('');
   const [editStatus, setEditStatus] = useState('');
+
+  // Helper for generating automatic image filenames
+  const getGeneratedSlideUrl = (num: number | '', letter: string, index: number) => {
+    return `${num}${letter.toLowerCase()}${index + 1}.png`;
+  };
+
+  // Helper for slide arrays
+  const addSlide = (isEdit: boolean) => {
+    if (isEdit) setEditSlides([...editSlides, { text: '', imageUrl: '' }]);
+    else setNewTrainingSlides([...newTrainingSlides, { text: '', imageUrl: '' }]);
+  };
+
+  const updateSlide = (index: number, field: keyof Slide, value: string, isEdit: boolean) => {
+    if (isEdit) {
+      const updated = [...editSlides]; updated[index][field] = value; setEditSlides(updated);
+    } else {
+      const updated = [...newTrainingSlides]; updated[index][field] = value; setNewTrainingSlides(updated);
+    }
+  };
 
   useEffect(() => {
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
@@ -64,31 +96,105 @@ export default function UserManagement({ userRole }: UserManagementProps) {
 
   const handleAddTrainingModule = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTrainingTitle.trim() || !newTrainingDescription.trim()) return;
+    if (!moduleNumber || !moduleLetter.trim() || !newTrainingTitle.trim() || newTrainingSlides.length === 0) {
+      showNotification('error', 'Please fill out Number, Letter, Title, and add at least one slide.');
+      return;
+    }
+
+    // Auto-generate URLs for all slides
+    const processedSlides = newTrainingSlides.map((slide, index) => ({
+      ...slide,
+      imageUrl: getGeneratedSlideUrl(moduleNumber, moduleLetter, index)
+    }));
+
+    const formattedTitle = `Module ${moduleNumber}-${moduleLetter.toUpperCase()} ${newTrainingTitle.trim()}`;
+
     const moduleData = {
-      title: newTrainingTitle.trim(),
-      description: newTrainingDescription.trim(),
+      moduleNumber: moduleNumber, 
+      moduleLetter: moduleLetter.toLowerCase(), 
+      title: formattedTitle,
+      description: newTrainingDescription,
+      slides: processedSlides,
       duration: newTrainingDuration.trim() || '5m',
       roles: newTrainingRoles,
       users: newTrainingUsers.split(',').map((u) => u.trim().toLowerCase()).filter(Boolean),
       active: true,
       createdAt: new Date()
     };
-    const docRef = await addDoc(collection(db, 'training_modules'), moduleData);
-    // training module created; publishing news or creating tasks is done via separate forms
+    await addDoc(collection(db, 'training_modules'), moduleData);
+    
+    setModuleNumber('');
+    setModuleLetter('');
     setNewTrainingTitle('');
     setNewTrainingDescription('');
+    setNewTrainingSlides([{ text: '', imageUrl: '' }]);
     setNewTrainingDuration('5m');
     setNewTrainingRoles([]);
     setNewTrainingUsers('');
-    setNewTrainingAsNews(false);
-    setNewTrainingAsTask(false);
     showNotification('success', 'Training module created successfully.');
   };
 
   const handleDeleteTrainingModule = async (moduleId: string) => {
     await deleteDoc(doc(db, 'training_modules', moduleId));
     showNotification('success', 'Training module removed.');
+  };
+
+  const handleOpenEditModule = (mod: any) => {
+    setEditingModule(mod);
+    const match = mod.title?.match(/^Module\s(\d+)-([a-zA-Z])\s(.*)$/i);
+    if (match) {
+      setEditModuleNumber(Number(match[1]));
+      setEditModuleLetter(match[2].toUpperCase());
+      setEditModuleTitle(match[3]);
+    } else {
+      setEditModuleNumber(mod.moduleNumber || '');
+      setEditModuleLetter(mod.moduleLetter?.toUpperCase() || '');
+      setEditModuleTitle(mod.title || '');
+    }
+
+    setEditModuleDescription(mod.description || '');
+    setEditSlides(mod.slides || []);
+    setEditModuleDuration(mod.duration || '');
+    setEditModuleRoles(mod.roles || []);
+    setEditModuleUsers((mod.users || []).join(', '));
+  };
+
+  const handleSaveEditModule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingModule) return;
+
+    if (!editModuleNumber || !editModuleLetter.trim() || !editModuleTitle.trim()) {
+      showNotification('error', 'Please fill out required fields.');
+      return;
+    }
+
+    // Auto-generate URLs for all slides upon saving edits
+    const processedSlides = editSlides.map((slide, index) => ({
+      ...slide,
+      imageUrl: getGeneratedSlideUrl(editModuleNumber, editModuleLetter, index)
+    }));
+
+    const formattedTitle = `Module ${editModuleNumber}-${editModuleLetter.toUpperCase()} ${editModuleTitle.trim()}`;
+
+    const updatedData = {
+      moduleNumber: editModuleNumber, 
+      moduleLetter: editModuleLetter.toLowerCase(), 
+      title: formattedTitle,
+      description: editModuleDescription,
+      slides: processedSlides,
+      duration: editModuleDuration.trim() || '5m',
+      roles: editModuleRoles,
+      users: editModuleUsers.split(',').map((u) => u.trim().toLowerCase()).filter(Boolean),
+    };
+
+    try {
+      await updateDoc(doc(db, 'training_modules', editingModule.id), updatedData);
+      setEditingModule(null);
+      showNotification('success', 'Training module updated successfully.');
+    } catch (err) {
+      console.error(err);
+      showNotification('error', 'Failed to update module.');
+    }
   };
 
   const showNotification = (type: 'success' | 'error', message: string) => {
@@ -105,7 +211,6 @@ export default function UserManagement({ userRole }: UserManagementProps) {
     setEditStatus(user.status || 'Pending');
   };
 
-  // View user details (tasks & training)
   const [viewUser, setViewUser] = useState<any | null>(null);
   const [viewUserTasks, setViewUserTasks] = useState<any[]>([]);
   const [viewUserProgress, setViewUserProgress] = useState<string[]>([]);
@@ -114,12 +219,10 @@ export default function UserManagement({ userRole }: UserManagementProps) {
     setViewUser(user);
     try {
       const email = (user.email || '').toString().trim().toLowerCase();
-      // load tasks assigned to this user
       const tasksQ = query(collection(db, 'tasks'), where('assignedTo', '==', email));
       const tasksSnap = await getDocs(tasksQ);
       setViewUserTasks(tasksSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
-      // load training progress
       const progRef = doc(db, 'training_progress', email);
       const progSnap = await getDoc(progRef);
       if (progSnap.exists()) {
@@ -211,10 +314,10 @@ export default function UserManagement({ userRole }: UserManagementProps) {
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest mr-auto">{user.status}</span>
                       {(user.status === 'Pending' || user.status === 'Suspended') && canEdit && (
-                        <button onClick={() => handleApprove(user.id)} className="bg-emerald-50 text-emerald-600 px-3 py-2 rounded-lg font-black text-[11px] uppercase">Approve</button>
+                        <button onClick={() => handleApprove(user.id)} className="bg-emerald-50 text-emerald-600 px-3 py-2 rounded-lg font-black text-[11px] uppercase cursor-pointer hover:bg-emerald-100">Approve</button>
                       )}
-                      <button onClick={() => canEdit && handleOpenEdit(user)} className="bg-slate-100 text-slate-700 px-3 py-2 rounded-lg font-black text-[11px] uppercase">Edit</button>
-                      <button onClick={() => canEdit && window.confirm('Delete?') && deleteDoc(doc(db, 'users', user.id))} className="bg-rose-50 text-rose-600 px-3 py-2 rounded-lg"><Trash2 size={16} /></button>
+                      <button onClick={() => canEdit && handleOpenEdit(user)} className="bg-slate-100 text-slate-700 px-3 py-2 rounded-lg font-black text-[11px] uppercase cursor-pointer hover:bg-slate-200">Edit</button>
+                      <button onClick={() => canEdit && window.confirm('Delete?') && deleteDoc(doc(db, 'users', user.id))} className="bg-rose-50 text-rose-600 px-3 py-2 rounded-lg cursor-pointer hover:bg-rose-100"><Trash2 size={16} /></button>
                     </div>
                   </div>
                 );
@@ -237,7 +340,7 @@ export default function UserManagement({ userRole }: UserManagementProps) {
                   {sortedRoles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
                 </select>
                 <input value={taskAssignedToInput} onChange={(e) => setTaskAssignedToInput(e.target.value)} placeholder="Assign to (email, optional)" className="w-full p-2 border border-amber-200 rounded-md text-sm mb-2" />
-                <button type="submit" className="w-full bg-orange-500 text-white p-2 rounded-md text-sm">Create Task</button>
+                <button type="submit" className="w-full bg-orange-500 text-white p-2 rounded-md text-sm cursor-pointer hover:bg-orange-600">Create Task</button>
               </form>
             </div>
           </div>
@@ -257,7 +360,7 @@ export default function UserManagement({ userRole }: UserManagementProps) {
                   {sortedRoles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
                 </select>
                 <input value={newsTargetUsers} onChange={(e) => setNewsTargetUsers(e.target.value)} placeholder="Comma-separated user emails" className="w-full p-2 border border-amber-200 rounded-md text-sm mb-2" />
-                <button type="submit" className="w-full bg-orange-500 text-white p-2 rounded-md text-sm">Publish News</button>
+                <button type="submit" className="w-full bg-orange-500 text-white p-2 rounded-md text-sm cursor-pointer hover:bg-orange-600">Publish News</button>
               </form>
             </div>
           </div>
@@ -291,7 +394,7 @@ export default function UserManagement({ userRole }: UserManagementProps) {
             </div>
             <form onSubmit={handleAddRole} className="flex gap-2 pt-4 border-t border-teal-100">
               <input type="text" placeholder="New Role..." value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} className="flex-1 p-2 border border-teal-200 rounded-lg text-sm" />
-              <button type="submit" className="bg-orange-500 text-white p-2 rounded-lg"><Plus size={18} /></button>
+              <button type="submit" className="bg-orange-500 text-white p-2 rounded-lg cursor-pointer hover:bg-orange-600"><Plus size={18} /></button>
             </form>
           </div>
         </div>
@@ -308,40 +411,58 @@ export default function UserManagement({ userRole }: UserManagementProps) {
               <span className="text-xs uppercase tracking-[0.2em] text-teal-700">{trainingModules.length} modules</span>
             </div>
 
-            <form onSubmit={handleAddTrainingModule} className="grid gap-4 lg:grid-cols-[1.4fr_0.9fr]">
-              <div className="space-y-4">
+            <form onSubmit={handleAddTrainingModule} className="space-y-4">
+              <div className="grid grid-cols-[80px_80px_1fr] gap-3">
+                <label className="block text-sm font-semibold text-teal-800">
+                  No.
+                  <input type="number" min="1" max="99" value={moduleNumber} onChange={(e) => setModuleNumber(e.target.value ? Number(e.target.value) : '')} className="mt-2 w-full p-3 border border-amber-200 rounded-2xl text-sm text-center focus:outline-teal-500" placeholder="1-99" />
+                </label>
+                <label className="block text-sm font-semibold text-teal-800">
+                  Letter
+                  <input type="text" maxLength={1} value={moduleLetter} onChange={(e) => { const val = e.target.value; if (/^[A-Za-z]*$/.test(val)) setModuleLetter(val.toUpperCase()); }} className="mt-2 w-full p-3 border border-amber-200 rounded-2xl text-sm uppercase text-center focus:outline-teal-500" placeholder="A-Z" />
+                </label>
                 <label className="block text-sm font-semibold text-teal-800">
                   Module Title
-                  <input value={newTrainingTitle} onChange={(e) => setNewTrainingTitle(e.target.value)} className="mt-2 w-full p-3 border border-amber-200 rounded-2xl text-sm" placeholder="Enter module title" />
-                </label>
-                <label className="block text-sm font-semibold text-teal-800">
-                  Description
-                  <textarea value={newTrainingDescription} onChange={(e) => setNewTrainingDescription(e.target.value)} className="mt-2 w-full p-3 border border-amber-200 rounded-2xl text-sm min-h-[120px]" placeholder="Outline the training goals and steps" />
-                </label>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <label className="block text-sm font-semibold text-teal-800">
-                    Duration
-                    <input value={newTrainingDuration} onChange={(e) => setNewTrainingDuration(e.target.value)} className="mt-2 w-full p-3 border border-amber-200 rounded-2xl text-sm" placeholder="e.g. 10m" />
-                  </label>
-                  <label className="block text-sm font-semibold text-teal-800">
-                    Target Roles
-                    <select multiple value={newTrainingRoles} onChange={(e) => setNewTrainingRoles(Array.from(e.target.selectedOptions, (option) => option.value))} className="mt-2 w-full p-3 border border-amber-200 rounded-2xl text-sm min-h-[120px] bg-white" size={4}>
-                      <option key="everyone" value="Everyone">Everyone</option>
-                      {sortedRoles.map((r) => (
-                        <option key={r.id} value={r.name}>{r.name}</option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                <label className="block text-sm font-semibold text-teal-800">
-                  Target Users
-                  <input value={newTrainingUsers} onChange={(e) => setNewTrainingUsers(e.target.value)} className="mt-2 w-full p-3 border border-amber-200 rounded-2xl text-sm" placeholder="Comma-separated emails or IDs" />
+                  <input value={newTrainingTitle} onChange={(e) => setNewTrainingTitle(e.target.value)} className="mt-2 w-full p-3 border border-amber-200 rounded-2xl text-sm focus:outline-teal-500" placeholder='e.g. "App Overview"' />
                 </label>
               </div>
 
-              <div className="space-y-4">
-                <button type="submit" className="w-full bg-orange-500 text-white rounded-2xl py-3 text-sm font-bold">Add Training Module</button>
+              <label className="block text-sm font-semibold text-teal-800">
+                  Description
+                  <textarea value={newTrainingDescription} onChange={(e) => setNewTrainingDescription(e.target.value)} className="mt-2 w-full p-3 border border-amber-200 rounded-2xl text-sm focus:outline-teal-500" placeholder="A short description of the training..." />
+              </label>
+
+              <div className="block text-sm font-semibold text-teal-800">
+                  Slides
+                  {newTrainingSlides.map((slide, i) => (
+                    <div key={i} className="mt-2 p-3 bg-white border border-amber-200 rounded-2xl space-y-2">
+                      <textarea value={slide.text} onChange={(e) => updateSlide(i, 'text', e.target.value, false)} className="w-full p-2 border rounded-xl text-sm" placeholder="Slide Content" />
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => addSlide(false)} className="mt-2 text-xs font-bold text-teal-700 bg-teal-100 px-3 py-1 rounded-full">+ Add Slide</button>
               </div>
+
+              <div className="grid sm:grid-cols-2 gap-4">
+                <label className="block text-sm font-semibold text-teal-800">
+                  Duration
+                  <input value={newTrainingDuration} onChange={(e) => setNewTrainingDuration(e.target.value)} className="mt-2 w-full p-3 border border-amber-200 rounded-2xl text-sm focus:outline-teal-500" placeholder="e.g. 10m" />
+                </label>
+                <label className="block text-sm font-semibold text-teal-800">
+                  Target Roles
+                  <select multiple value={newTrainingRoles} onChange={(e) => setNewTrainingRoles(Array.from(e.target.selectedOptions, (option) => option.value))} className="mt-2 w-full p-3 border border-amber-200 rounded-2xl text-sm min-h-[120px] bg-white focus:outline-teal-500" size={4}>
+                    <option key="everyone" value="Everyone">Everyone</option>
+                    {sortedRoles.map((r) => (
+                      <option key={r.id} value={r.name}>{r.name}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <label className="block text-sm font-semibold text-teal-800">
+                Target Users
+                <input value={newTrainingUsers} onChange={(e) => setNewTrainingUsers(e.target.value)} className="mt-2 w-full p-3 border border-amber-200 rounded-2xl text-sm focus:outline-teal-500" placeholder="Comma-separated emails or IDs" />
+              </label>
+              
+              <button type="submit" className="w-full bg-orange-500 text-white rounded-2xl py-3 text-sm font-bold cursor-pointer hover:bg-orange-600 transition">Add Training Module</button>
             </form>
           </div>
 
@@ -349,24 +470,97 @@ export default function UserManagement({ userRole }: UserManagementProps) {
             <h4 className="text-sm font-bold uppercase tracking-[0.18em] text-teal-800 mb-4">Existing Modules</h4>
             <div className="space-y-4">
               {trainingModules.length > 0 ? trainingModules.map((module) => (
-                <div key={module.id} className="border rounded-2xl p-4 bg-amber-50">
+                <div key={module.id} className="border border-teal-100 rounded-2xl p-4 bg-white shadow-sm hover:border-teal-300 transition">
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                     <div className="space-y-2">
                       <p className="text-sm font-bold text-teal-900">{module.title}</p>
-                      <p className="text-sm text-teal-700">{module.description}</p>
+                      <p className="text-xs text-slate-500 italic">{module.description || 'No description provided'}</p>
+                      <p className="text-sm text-teal-700 leading-relaxed">Contains {module.slides?.length || 0} slides</p>
                     </div>
-                    <button type="button" onClick={() => window.confirm('Delete this training module?') && handleDeleteTrainingModule(module.id)} className="self-start rounded-full bg-teal-100 px-3 py-2 text-teal-700 text-sm font-semibold">Delete</button>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-3 text-xs text-teal-600 mt-3">
-                    <span>Duration: {module.duration || 'N/A'}</span>
-                    <span>Roles: {(module.roles || []).join(', ') || 'All'}</span>
-                    <span>Users: {(module.users || []).join(', ') || 'All'}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button type="button" onClick={() => handleOpenEditModule(module)} className="rounded-full bg-amber-100 hover:bg-amber-200 transition px-3 py-2 text-amber-700 text-xs font-black uppercase tracking-wider cursor-pointer">
+                        Edit
+                      </button>
+                      <button type="button" onClick={() => window.confirm('Delete this training module?') && handleDeleteTrainingModule(module.id)} className="rounded-full bg-rose-100 hover:bg-rose-200 transition px-3 py-2 text-rose-700 text-xs font-black uppercase tracking-wider cursor-pointer">
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
               )) : (
-                <p className="text-sm text-teal-700">No training modules have been created yet. Use the form above to add one.</p>
+                <p className="text-sm text-teal-700">No training modules have been created yet.</p>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT MODAL */}
+      {editingModule && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fadeIn">
+          <div className="bg-white rounded-3xl border border-teal-100 p-6 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-black text-xl text-teal-900">Edit Training Module</h3>
+              <button onClick={() => setEditingModule(null)} className="text-slate-400 hover:text-slate-600 transition bg-slate-100 p-2 rounded-full cursor-pointer"><X className="w-5 h-5" /></button>
+            </div>
+            
+            <form onSubmit={handleSaveEditModule} className="space-y-4">
+              <div className="grid grid-cols-[80px_80px_1fr] gap-3">
+                <label className="block text-sm font-semibold text-teal-800">
+                  No.
+                  <input type="number" min="1" max="99" value={editModuleNumber} onChange={(e) => setEditModuleNumber(e.target.value ? Number(e.target.value) : '')} className="mt-2 w-full p-2.5 border border-slate-200 rounded-xl text-sm text-center focus:border-teal-500 focus:outline-none bg-slate-50" />
+                </label>
+                <label className="block text-sm font-semibold text-teal-800">
+                  Letter
+                  <input type="text" maxLength={1} value={editModuleLetter} onChange={(e) => { const val = e.target.value; if (/^[A-Za-z]*$/.test(val)) setEditModuleLetter(val.toUpperCase()); }} className="mt-2 w-full p-2.5 border border-slate-200 rounded-xl text-sm uppercase text-center focus:border-teal-500 focus:outline-none bg-slate-50" />
+                </label>
+                <label className="block text-sm font-semibold text-teal-800">
+                  Module Title
+                  <input value={editModuleTitle} onChange={(e) => setEditModuleTitle(e.target.value)} className="mt-2 w-full p-2.5 border border-slate-200 rounded-xl text-sm focus:border-teal-500 focus:outline-none bg-slate-50" />
+                </label>
+              </div>
+
+              <label className="block text-sm font-semibold text-teal-800">
+                Description
+                <textarea value={editModuleDescription} onChange={(e) => setEditModuleDescription(e.target.value)} className="mt-2 w-full p-2.5 border border-slate-200 rounded-xl text-sm focus:border-teal-500 focus:outline-none bg-slate-50" />
+              </label>
+
+              <div className="block text-sm font-semibold text-teal-800">
+                Slides
+                {editSlides.map((slide, i) => (
+                  <div key={i} className="mt-2 p-3 border border-slate-200 rounded-2xl space-y-2">
+                    <textarea value={slide.text} onChange={(e) => updateSlide(i, 'text', e.target.value, true)} className="w-full p-2 border rounded-xl text-sm" placeholder="Slide Text" />
+                  </div>
+                ))}
+                <button type="button" onClick={() => addSlide(true)} className="mt-2 text-xs font-bold text-teal-700 bg-teal-100 px-3 py-1 rounded-full">+ Add Slide</button>
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-4">
+                <label className="block text-sm font-semibold text-teal-800">
+                  Duration
+                  <input value={editModuleDuration} onChange={(e) => setEditModuleDuration(e.target.value)} className="mt-2 w-full p-2.5 border border-slate-200 rounded-xl text-sm focus:border-teal-500 focus:outline-none bg-slate-50" />
+                </label>
+                <label className="block text-sm font-semibold text-teal-800">
+                  Target Roles
+                  <select multiple value={editModuleRoles} onChange={(e) => setEditModuleRoles(Array.from(e.target.selectedOptions, (option) => option.value))} className="mt-2 w-full p-2.5 border border-slate-200 rounded-xl text-sm min-h-[100px] bg-slate-50 focus:border-teal-500 focus:outline-none" size={4}>
+                    <option key="everyone" value="Everyone">Everyone</option>
+                    {sortedRoles.map((r) => (
+                      <option key={r.id} value={r.name}>{r.name}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <label className="block text-sm font-semibold text-teal-800">
+                Target Users (Emails)
+                <input value={editModuleUsers} onChange={(e) => setEditModuleUsers(e.target.value)} className="mt-2 w-full p-2.5 border border-slate-200 rounded-xl text-sm focus:border-teal-500 focus:outline-none bg-slate-50" />
+              </label>
+
+              <div className="flex gap-3 pt-4 border-t border-slate-100">
+                <button type="button" onClick={() => setEditingModule(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 transition py-3 rounded-xl text-sm font-bold text-slate-700 cursor-pointer">Cancel</button>
+                <button type="submit" className="flex-1 bg-teal-600 hover:bg-teal-700 transition text-white py-3 rounded-xl text-sm font-bold shadow-md cursor-pointer">Save Changes</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -379,7 +573,7 @@ export default function UserManagement({ userRole }: UserManagementProps) {
                 <h3 className="font-extrabold text-lg">{viewUser.displayName || 'Staff Member'}</h3>
                 <p className="text-sm text-slate-500">Tasks, training, and profile details for the selected staff member.</p>
               </div>
-              <button onClick={() => setViewUser(null)} className="text-slate-500">Close</button>
+              <button onClick={() => setViewUser(null)} className="text-slate-500 hover:text-slate-800 cursor-pointer"><X className="w-5 h-5"/></button>
             </div>
             <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
               <div className="mb-4 grid gap-3 sm:grid-cols-3">
@@ -396,10 +590,6 @@ export default function UserManagement({ userRole }: UserManagementProps) {
                   <p className="text-sm text-slate-700">{viewUser.role || 'Staff'}</p>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <span className="rounded-full bg-teal-100 px-3 py-1 text-[11px] font-semibold text-teal-700">{viewUser.status || 'Pending'}</span>
-                {viewUser.phone && <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-700">{viewUser.phone}</span>}
-              </div>
             </div>
             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -415,12 +605,10 @@ export default function UserManagement({ userRole }: UserManagementProps) {
               </div>
               <div>
                 <h4 className="font-bold text-sm mb-2">Training Progress</h4>
-                <div className="text-xs text-slate-500">Completed lessons: {viewUserProgress.length}</div>
                 <div className="mt-2 space-y-2">
                   {trainingModules.map((mod) => (
-                    <div key={mod.id} className={`p-2 border rounded ${viewUserProgress.includes(mod.id) ? 'bg-emerald-50 border-emerald-100' : 'bg-white'}`}>
+                    <div key={mod.id} className="p-2 border rounded bg-white">
                       <div className="font-medium text-sm">{mod.title}</div>
-                      <div className="text-[11px] text-slate-500">{mod.description}</div>
                     </div>
                   ))}
                 </div>
@@ -444,8 +632,8 @@ export default function UserManagement({ userRole }: UserManagementProps) {
                 <option value="Suspended">Suspended</option>
               </select>
               <div className="flex gap-2 pt-2">
-                <button type="button" onClick={() => setEditingUser(null)} className="flex-1 bg-slate-100 py-2 rounded-xl text-xs font-bold">Cancel</button>
-                <button type="submit" className="flex-1 bg-slate-900 text-white py-2 rounded-xl text-xs font-bold">Save</button>
+                <button type="button" onClick={() => setEditingUser(null)} className="flex-1 bg-slate-100 py-2 rounded-xl text-xs font-bold cursor-pointer">Cancel</button>
+                <button type="submit" className="flex-1 bg-slate-900 text-white py-2 rounded-xl text-xs font-bold cursor-pointer">Save</button>
               </div>
             </form>
           </div>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import AdminPanel from './components/AdminPanel';
 import Management from './components/Management';
 import UserManagement from './context/UserManagement'; 
@@ -32,18 +32,21 @@ export default function AdminTabContainer({
 }: AdminTabContainerProps) {
 
   const activeView = forcedSubTabOverride || 'staff';
+  
+  // State for Management tabs
+  const [activeTab, setActiveTab] = useState(forcedSubTabOverride || 'categories');
 
   const mappedSchools = (schools || []).map((s: any) => ({
     id: s.id,
     name: s.name || 'Unnamed School Record',
     schoolType: s.schoolType || 'JIN',
     schoolIdCode: s.schoolIdCode || (s.skuCode ? s.skuCode.substring(3) : 'META'),
-    skuCode: s.skuCode || 'JINMETA',
+    skuCode: s.skuCode || 'SKU-0000',
     logoUrl: s.logoUrl || ''
   }));
+
   return (
-    <div className="w-full animate-fadeIn">
-      {/* 🧭 ROUTER ENGINE BLOCK */}
+    <div className="w-full">
       {activeView === 'staff' && (
         <div className="w-full">
           <UserManagement userRole={userRole} />
@@ -62,7 +65,6 @@ export default function AdminTabContainer({
         </div>
       ) : null}
 
-
       {['categories', 'schoolTypes', 'schools', 'types', 'sizes', 'colours', 'locations'].includes(activeView) && (
         <Management 
           schools={mappedSchools}
@@ -74,6 +76,8 @@ export default function AdminTabContainer({
           schoolTypes={schoolTypes || []}
           userRole={userRole}
           forcedSubTabOverride={activeView as any}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
         />
       )}
     </div>

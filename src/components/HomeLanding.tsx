@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, doc, updateDoc, serverTimestamp, getDoc, setDoc, onSnapshot, getDocs, query, where, increment } from 'firebase/firestore';
-import { Megaphone, CheckSquare, BookOpen, Clock, User, Check, Play, AlertCircle } from 'lucide-react';
+import { collection, addDoc, doc, updateDoc, serverTimestamp, getDoc, onSnapshot, getDocs, query, where, increment } from 'firebase/firestore';
+import { Megaphone, CheckSquare, Clock, User, Check, Play, AlertCircle } from 'lucide-react';
 
 interface HomeLandingProps {
   categories: any[];
@@ -24,38 +24,33 @@ export default function HomeLanding({
   tasksList,
   users
 }: HomeLandingProps) {
-  // Input tracking states for content creation
   const [newAnnouncement, setNewAnnouncement] = useState('');
   const [newTaskName, setNewTaskName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [trainingModules, setTrainingModules] = useState<any[]>([]);
 
-  // Filter out and sort your live data streams
   const isAdminOrDev = userRole === 'Admin' || userRole === 'admin' || userRole === 'Dev' || userRole === 'dev';
   const sortedNews = [...newsFeed].sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
   
-  // Personalized news: logged-in email, role, or Everyone
   const personalizedNews = sortedNews.filter((n) => {
     if (!n) return false;
     const roles = Array.isArray(n.targetRoles) ? n.targetRoles : [];
-    const users = Array.isArray(n.targetUsers) ? n.targetUsers : [];
-    if (users.includes(loggedInEmail)) return true;
+    const targetUsers = Array.isArray(n.targetUsers) ? n.targetUsers : [];
+    if (targetUsers.includes(loggedInEmail)) return true;
     if (roles.includes(userRole) || roles.includes('Everyone')) return true;
-    return roles.length === 0 && users.length === 0;
+    return roles.length === 0 && targetUsers.length === 0;
   });
 
-  // Task pool filtered by current user email, role, or Everyone
   const activeTaskPool = tasksList.filter((t) => {
     if (t.status !== 'unassigned') return false;
     const roles = Array.isArray(t.roles) ? t.roles : [];
-    const users = Array.isArray(t.targetUsers) ? t.targetUsers : [];
-    if (users.includes(loggedInEmail)) return true;
+    const targetUsers = Array.isArray(t.targetUsers) ? t.targetUsers : [];
+    if (targetUsers.includes(loggedInEmail)) return true;
     if (roles.includes(userRole) || roles.includes('Everyone')) return true;
-    return roles.length === 0 && users.length === 0;
+    return roles.length === 0 && targetUsers.length === 0;
   });
   const myClaimedTasks = tasksList.filter((t) => t.status === 'claimed' && t.assignedTo === loggedInEmail);
 
-  // Training module system
   const [lessonsCompleted, setLessonsCompleted] = useState<string[]>([]);
 
   useEffect(() => {
@@ -83,79 +78,29 @@ export default function HomeLanding({
     return () => { unsubTraining(); };
   }, []);
 
-  const visibleTrainingModules = trainingModules.filter((module) => {
-    if (lessonsCompleted.includes(module.id)) return false;
-    if (isAdminOrDev) return true;
-    const roles = Array.isArray(module.roles) ? module.roles : [];
-    const users = Array.isArray(module.targetUsers) ? module.targetUsers : [];
-    if (users.includes(loggedInEmail)) return true;
-    if (roles.includes(userRole) || roles.includes('Everyone')) return true;
-    return roles.length === 0 && users.length === 0;
-  });
-
-  const trainingItems = visibleTrainingModules;
-
-  // Training counts for the logged-in user (completed / total assigned)
   const modulesForUser = trainingModules.filter((module) => {
     if (isAdminOrDev) return true;
     const roles = Array.isArray(module.roles) ? module.roles : [];
-    const users = Array.isArray(module.targetUsers) ? module.targetUsers : [];
-    if (users.includes(loggedInEmail)) return true;
+    const targetUsers = Array.isArray(module.targetUsers) ? module.targetUsers : [];
+    if (targetUsers.includes(loggedInEmail)) return true;
     if (roles.includes(userRole) || roles.includes('Everyone')) return true;
-    return roles.length === 0 && users.length === 0;
+    return roles.length === 0 && targetUsers.length === 0;
   });
+  
   const completedTrainingCount = modulesForUser.filter((m) => lessonsCompleted.includes(m.id)).length;
   const totalTrainingCount = modulesForUser.length;
   const trainingPercent = totalTrainingCount === 0 ? 0 : Math.round((completedTrainingCount / totalTrainingCount) * 100);
 
-  const handleViewModule = (lessonId: string) => {
-    const lesson = trainingItems.find((item) => item.id === lessonId);
-    if (!lesson) return;
-    alert(`Viewing module: ${lesson.title || 'Untitled'}\n\n${lesson.description || 'No details available.'}`);
-  };
-
-  const handleCompleteLesson = async (lessonId: string) => {
-    try {
-      if (!loggedInEmail) return;
-      // Prevent double-counting: only increment when lesson wasn't already completed
-      const alreadyDone = lessonsCompleted.includes(lessonId);
-      const next = Array.from(new Set([...lessonsCompleted, lessonId]));
-      setLessonsCompleted(next);
-      await setDoc(doc(db, 'training_progress', loggedInEmail), { lessonsCompleted: next, updatedAt: serverTimestamp() }, { merge: true });
-
-      if (!alreadyDone) {
-        // Increment user's trainingComplete counter
-        const assignedEmail = loggedInEmail.toString().trim().toLowerCase();
-        const matchedUser = (users || []).find((u) => {
-          const email = (u?.email || '').toString().trim().toLowerCase();
-          return email === assignedEmail || u?.id === loggedInEmail;
-        });
-
-        if (matchedUser?.id) {
-          await updateDoc(doc(db, 'users', matchedUser.id), { trainingComplete: increment(1) });
-        } else {
-          // Fallback: lookup by email in users collection
-          const userQuery = query(collection(db, 'users'), where('email', '==', assignedEmail));
-          const userSnapshot = await getDocs(userQuery);
-          userSnapshot.forEach((userDoc) => {
-            updateDoc(userDoc.ref, { trainingComplete: increment(1) }).catch((err) => console.error('Failed to increment trainingComplete for fallback user lookup', err));
-          });
-        }
-      }
-    } catch (err) { console.error('Failed to persist lesson completion', err); }
-  };
-
-  // Total hardware calculations for the ledger cards
   const totalStockUnits = inventory.reduce((acc, item) => acc + (Number(item.quantity) || 0), 0);
   const currentUserRecord = (users || []).find((u) => {
     const userEmail = (u?.email || '').toString().trim().toLowerCase();
     const loggedEmail = (loggedInEmail || '').toString().trim().toLowerCase();
     return userEmail === loggedEmail || u?.id === loggedInEmail;
   });
+  
   const completedTaskCount = currentUserRecord
     ? Number(currentUserRecord.taskComplete || 0)
     : tasksList.filter((t) => t.status === 'completed' && (t.assignedTo || '').toString().trim().toLowerCase() === (loggedInEmail || '').toString().trim().toLowerCase()).length;
-  const usersCount = users.length;
 
   const handlePostAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,26 +116,9 @@ export default function HomeLanding({
     } catch (err) { console.error("Broadcast write failed:", err); } 
     finally { setIsSubmitting(false); }
   };
-  const handleCreateTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTaskName.trim()) return;
-    try {
-      setIsSubmitting(true);
-      await addDoc(collection(db, 'tasks'), {
-        taskName: newTaskName.trim(),
-        status: 'unassigned',
-        assignedTo: '',
-        createdAt: serverTimestamp(),
-        completedAt: null
-      });
-      setNewTaskName('');
-    } catch (err) { console.error("Task payload failed:", err); } 
-    finally { setIsSubmitting(false); }
-  };
 
   const handleClaimTask = async (taskId: string) => {
     try {
-      // Enforce your lock rule: Pickers can only handle 1 active task at a time
       if (myClaimedTasks.length >= 1) {
         alert("Operation Blocked: You must mark your current active task as completed before claiming another one.");
         return;
@@ -225,7 +153,7 @@ export default function HomeLanding({
           const userQuery = query(collection(db, 'users'), where('email', '==', assignedUserEmail));
           const userSnapshot = await getDocs(userQuery);
           userSnapshot.forEach((userDoc) => {
-            updateDoc(userDoc.ref, { taskComplete: increment(1) }).catch((err) => console.error('Failed to increment taskComplete for fallback user lookup', err));
+            updateDoc(userDoc.ref, { taskComplete: increment(1) }).catch((err) => console.error('Failed to increment taskComplete', err));
           });
         }
       }
@@ -240,7 +168,6 @@ export default function HomeLanding({
   return (
     <div className="space-y-6 text-left animate-fadeIn font-sans w-full max-w-5xl">
       
-      {/* 🏷️User Tracking*/}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white border rounded-2xl p-5 shadow-xs">
           <span className="block text-[10px] text-slate-400 uppercase font-mono font-bold tracking-wider">Garments Stocked</span>
@@ -267,7 +194,6 @@ export default function HomeLanding({
         </div>
       </div>
 
-      {/* 📢 CONTAINER 1: THE DYNAMIC ADMINISTRATIVE NEWS FEED */}
       <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs border-t-4 border-brand-teal space-y-4">
         <div className="flex items-center gap-2 pb-2 border-b">
           <Megaphone className="w-5 h-5 text-brand-teal shrink-0" />
@@ -294,10 +220,8 @@ export default function HomeLanding({
           {personalizedNews.length === 0 && <p className="text-xs text-slate-400 italic py-2">No updates for you right now.</p>}
         </div>
       </div>
-      {/* 📋 CONTAINER 2: DYNAMIC TASK POOL & VOLUNTARY ASSIGNMENT LOGIC */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
         
-        {/* LEFT COLUMN: ACTIVE UNASSIGNED TASK LOG POOL */}
         <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4 text-left">
           <div className="flex items-center justify-between border-b pb-2">
             <div className="flex items-center gap-2">
@@ -318,7 +242,6 @@ export default function HomeLanding({
           </div>
         </div>
 
-        {/* RIGHT COLUMN: MY CURRENTLY LOCKED ACTIVE WORK TRACKER */}
         <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4 text-left">
           <div className="flex items-center gap-2 border-b pb-2">
             <User className="w-5 h-5 text-slate-800 shrink-0" />
@@ -345,45 +268,6 @@ export default function HomeLanding({
           </div>
         </div>
       </div>
-
-      {/* 📚 CONTAINER 3: THE INTERACTIVE ACADEMY WORKMAN MANUAL TUTORIALS */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4 w-full">
-        <div className="flex items-center gap-2 pb-2 border-b">
-          <BookOpen className="w-5 h-5 text-slate-800 shrink-0" />
-          <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">UniformEX Training Manual</h3>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-medium">
-          {trainingItems.length > 0 ? trainingItems.map((lesson: any) => {
-            const done = lessonsCompleted.includes(lesson.id);
-            const roleNames = Array.isArray(lesson.roles) ? lesson.roles.join(', ') : 'All roles';
-            return (
-              <div key={lesson.id} className={`p-3.5 border rounded-xl space-y-1.5 ${done ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50'}`}>
-                <div className="flex items-center justify-between">
-                  <span className="block font-black text-slate-900 uppercase tracking-wider text-[10px] text-brand-primary">{lesson.title}</span>
-                  <span className="text-[10px] font-mono text-slate-500">{lesson.duration || 'n/a'}</span>
-                </div>
-                <p className="text-slate-500 leading-relaxed text-[11px]">
-                  {lesson.description || 'Training module description not provided.'}
-                </p>
-                {Array.isArray(lesson.roles) && lesson.roles.length > 0 && (
-                  <div className="text-[10px] text-slate-500">Target roles: {roleNames}</div>
-                )}
-                <div className="pt-2">
-                  {!done ? (
-                    <button onClick={() => handleViewModule(lesson.id)} className="py-2 px-3 bg-brand-primary text-white rounded-lg text-xs font-black">View Module</button>
-                  ) : (
-                    <button disabled className="py-2 px-3 bg-emerald-600 text-white rounded-lg text-xs font-black">Completed</button>
-                  )}
-                </div>
-              </div>
-            );
-          }) : (
-            <div className="col-span-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 text-xs">No active training modules are available for your role or email at this time.</div>
-          )}
-        </div>
-      </div>
-
     </div>
   );
 }

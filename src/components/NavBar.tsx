@@ -50,6 +50,7 @@ export default function NavBar({
 }: NavBarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [homeExpanded, setHomeExpanded] = useState(false);
   const [inventoryExpanded, setInventoryExpanded] = useState(false);
   const [managementExpanded, setManagementExpanded] = useState(false);
   const [adminExpanded, setAdminExpanded] = useState(false);
@@ -86,16 +87,26 @@ export default function NavBar({
   const NavLinksMenuTree = () => (
     <div className="flex flex-col h-full justify-between select-none relative">
       <div className="flex-1 overflow-y-auto pr-1 space-y-4 scrollbar-none text-left" style={{ maxHeight: 'calc(100vh - 230px)' }}>
-        <div className="px-1">
-          <button 
-            type="button"
-            onClick={() => handleSelectStaticPage(null as any)}
-            className={`w-full py-2.5 px-4 flex items-center gap-2.5 rounded-full border transition cursor-pointer text-xs font-black uppercase tracking-wider duration-150 shadow-xs hover:scale-[1.01] active:scale-[0.99]
-              ${activeMainTab === null ? 'bg-amber-400 text-slate-900 border-transparent shadow-sm' : 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'}`}
-          >
-            <Layers className={`w-4 h-4 ${activeMainTab === null ? 'text-slate-900' : 'text-white/70'}`} />
-            <span>Home Dashboard</span>
+        
+        {/* Home Drawer */}
+        <div className="space-y-1">
+          <button onClick={() => setHomeExpanded(!homeExpanded)} className={`w-full py-2.5 px-3 flex items-center justify-between rounded-full border transition cursor-pointer duration-200 ${homeExpanded ? 'bg-white/15 text-white border-white/10 shadow-xs font-black' : 'bg-white/5 text-white/70 border-transparent hover:bg-white/10 hover:text-white'}`}>
+            <div className="flex items-center gap-2">
+              <Layers className={`w-4 h-4 ${homeExpanded ? 'text-amber-400' : 'text-white/80'}`} />
+              <span className="uppercase text-[10px] tracking-widest font-extrabold">Home</span>
+            </div>
+            {homeExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           </button>
+          {homeExpanded && (
+            <div className="pl-4 border-l border-white/10 ml-5 space-y-1 pt-1 animate-fadeIn">
+              <button onClick={() => handleSelectStaticPage(null as any)} className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === null ? 'bg-amber-400 text-slate-900' : 'text-white hover:bg-white/10'}`}>
+                <BarChart3 className="w-3.5 h-3.5 text-white/60" /><span>Dashboard</span>
+              </button>
+              <button onClick={() => handleSelectStaticPage('training')} className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === 'training' ? 'bg-amber-400 text-slate-900' : 'text-white hover:bg-white/10'}`}>
+                <Terminal className="w-3.5 h-3.5 text-white/60" /><span>Training</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Inventory Drawer */}

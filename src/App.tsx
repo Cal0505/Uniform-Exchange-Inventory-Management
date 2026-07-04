@@ -16,6 +16,7 @@ import NavBar from './components/NavBar';
 import HomeLanding from './components/HomeLanding';
 import AdminTabContainer from './AdminTabContainer'; 
 import StatsDashboard from './components/StatsDashboard';
+import Training from './components/Training'; // <-- New Import!
 import { useFirestoreData } from './useFirestoreData'; 
 
 interface AdvancedSchool {
@@ -26,14 +27,12 @@ interface AdvancedAttribute {
   id: string; name?: string; label?: string; skuCode: string; ruleProfile?: string;
 }
 
-// The main authenticated application logic (formerly known as 'App')
 function MainApp() {
   const { user, loading } = useAuth();
   const [userRole, setUserRole] = useState<string>('');
   const [userName, setUserName] = useState<string>(''); 
   const [isFirebaseConnected, setIsFirebaseConnected] = useState(false);
 
-  // Fetch Role, Name, and Status when user logs in
   useEffect(() => {
     const fetchUserData = async () => {
       if (user?.email) {
@@ -44,7 +43,6 @@ function MainApp() {
           if (!querySnapshot.empty) {
             const data = querySnapshot.docs[0].data();
             
-            // SECURITY CHECK: Convert to lowercase to catch both 'Active' and 'active'
             if (data.status?.toLowerCase() === 'active') {
               setUserRole(data.role || 'User');
               setUserName(data.displayName || 'User');
@@ -149,6 +147,8 @@ function MainApp() {
       />
       <main className="flex-1 p-4 md:p-8 xl:pl-72 overflow-x-hidden w-full">
         {effectiveMainTab === null && <HomeLanding categories={dataPool.categories || []} schools={mappedSchools} inventory={dataPool.inventory || []} userRole={userRole} loggedInEmail={user.email || ''} newsFeed={newsFeed} tasksList={tasksList} users={dataPool.users || []} />}
+        {/* Render the new Training component here! */}
+        {effectiveMainTab === 'training' && <Training userRole={userRole} loggedInEmail={user.email || ''} users={dataPool.users || []} />}
         {effectiveMainTab === 'inventory_view' && <Inventory currentViewedCategory={currentViewedCategory} categories={dataPool.categories || []} schools={mappedSchools} clothingTypes={mapAttribute(dataPool.clothingTypes)} sizes={mapAttribute(dataPool.sizes)} colours={mapAttribute(dataPool.colours)} locations={mapAttribute(dataPool.locations)} inventory={dataPool.inventory || []} />}
         {effectiveMainTab === 'management_view' && <Management schools={mappedSchools} clothingTypes={mapAttribute(dataPool.clothingTypes)} sizes={mapAttribute(dataPool.sizes)} colours={mapAttribute(dataPool.colours)} locations={mapAttribute(dataPool.locations)} categories={dataPool.categories || []} schoolTypes={dataPool.schoolTypes || []} userRole={userRole} activeTab={activeSubTab} setActiveTab={setActiveSubTab} />}
         {effectiveMainTab === 'staff' && <AdminTabContainer schools={mappedSchools as any} clothingTypes={mapAttribute(dataPool.clothingTypes) as any} sizes={mapAttribute(dataPool.sizes) as any} colours={mapAttribute(dataPool.colours) as any} locations={mapAttribute(dataPool.locations) as any} categories={dataPool.categories || []} itemTypes={[]} schoolTypes={dataPool.schoolTypes || []} userRole={userRole} forcedSubTabOverride="staff" />}
@@ -162,15 +162,11 @@ function MainApp() {
   );
 }
 
-// Global Router Wrapper
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Registration URL for Email Links */}
         <Route path="/register" element={<Register />} />
-        
-        {/* The entire existing application handles everything else */}
         <Route path="/*" element={<MainApp />} />
       </Routes>
     </BrowserRouter>
