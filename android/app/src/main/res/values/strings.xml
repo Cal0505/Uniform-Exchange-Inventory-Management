@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">uniform-ex-inventory-management</string>
     <string name="title_activity_main">uniform-ex-inventory-management</string>
-    <string name="package_name">com.example.app</string>
-    <string name="custom_url_scheme">com.example.app</string>
+    <string name="package_name">com.uniformexchange.inventory</string>
+    <string name="custom_url_scheme">com.uniformexchange.inventory</string>
 </resources>
