@@ -1,0 +1,243 @@
+import { initializeApp } from 'firebase/app';
+import { getFirestore, collection, getDocs, addDoc, query, where } from 'firebase/firestore';
+
+const firebaseConfig = {
+  apiKey: 'AIzaSyDwoXVlYu0DkNeEP9VK-E0UL105vHMXydU',
+  authDomain: 'uniformex-inventory-app.firebaseapp.com',
+  projectId: 'uniformex-inventory-app',
+  storageBucket: 'uniformex-inventory-app.firebasestorage.app',
+  messagingSenderId: '962236027572',
+  appId: '1:962236027572:web:6fe1c280f1cd4acb6a3de1',
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const schools = [
+  ['All Hallows Primary','JIN','AHW'],
+  ['All Saints Catholic','H','ALL'],
+  ['Ashbrow','JIN','ASH'],
+  ['Batley Girls High','H','BGH'],
+  ['Batley Grammar Primary Side','JIN','BAT'],
+  ['Batley Grammar Secondary Side','H','BAT'],
+  ['Batley Parish','JIN','BYP'],
+  ['BBG Birkenshaw and Birstall Grammar','H','BBG'],
+  ['Beaumont Primary Academy','JIN','BEA'],
+  ['Berry Brow Infants & Nursery','IN','BRY'],
+  ['BirdsEdge First','F','BRD'],
+  ['Birkby Infants','I','BKB'],
+  ['Birkby Junior','J','BKJ'],
+  ['Birkenshaw Primary','JIN','BKW'],
+  ['Birstall Primary Academy','JIN','BPA'],
+  ['Boothroyd Primary Academy','JIN','BOO'],
+  ['Brambles Primary Academy','JIN','BRM'],
+  ['Brighouse high','H','BRG'],
+  ['Brockholes CE','JI','BRC'],
+  ['Brooksbank high','H','BRB'],
+  ['Bywell Junior','J','BYW'],
+  ['Carlinghow Academy','JIN','CAR'],
+  ['Carlton Junior and Infants','JI','CRL'],
+  ['Carr green lane primary','JIN','CGL'],
+  ['Castle Hill Primary','JIN','CHL'],
+  ['Castle Hill Secondary','H','CHS'],
+  ['Christ Church Academy','JIN','CCA'],
+  ['Clough Head J&I','JI','CHD'],
+  ['Co-Op Academy Smithies Moor','JIN','COP'],
+  ['Colne Valley High','H','CVS'],
+  ['Crossley Heath High, Halifax','H','CHX'],
+  ['Crow Lane Primary','JIN','CWH'],
+  ['Cumberworth','F','CUM'],
+  ['Dalton','JIN','DAL'],
+  ['DELTA ACADEMY: Eastborough JIN & Heckmondwike','JIN','DEL'],
+  ['Denby Dale First','F','DDF'],
+  ['Denby First','F','DBY'],
+  ['Diamond Wood Academy','IN','DWD'],
+  ['Earlsheaton Infant','I','ERL'],
+  ['East Bierley Primary','JIN','ESB'],
+  ['Emley First','F','EMY'],
+  ['Fairfield Special High (12-XXXL)','H','FFS'],
+  ['Fairfield Special JIN (3-11)','JIN','FFS'],
+  ['Farnley Tyas First','F','FYT'],
+  ['Field Lane JIN','JIN','FIL'],
+  ['Fieldhead Primary Academy','JIN','FHA'],
+  ['Fixby Primary','JIN','FXY'],
+  ['Flockton First','F','FKN'],
+  ['Golcar JIN Manor Road','JIN','GMR'],
+  ['Gomersal Primary','JIN','GOM'],
+  ['Gomersal St Mary\'s Primary','JIN','GSM'],
+  ['Grange Moor Primary','JIN','GGM'],
+  ['Hade Edge','JIN','HDE'],
+  ['Hanging Heaton','JI','HHP'],
+  ['Hartshead J&I','JI','HAR'],
+  ['Headfield Junior','J','HDF'],
+  ['Headlands CoE','JIN','HED'],
+  ['Healey JIN','JIN','HEA'],
+  ['Heaton Avenue Primary','JIN','HVE'],
+  ['Heckmondwike Grammar','H','HKG'],
+  ['Helme Academy','JIN','HEL'],
+  ['Hepworth','JI','HEP'],
+  ['High Bank','JIN','HGH'],
+  ['Highburton','F','HBF'],
+  ['Hightown JIN','JIN','HGT'],
+  ['Hill View Academy','JIN','HLV'],
+  ['Hillside Primary','JIN','HLL'],
+  ['Hinchcliffe Mill J&I','JI','HCH'],
+  ['Holme J&I','JI','HLE'],
+  ['Holmfirth High','H','HLM'],
+  ['Holy Spirit Catholic Primary','JIN','HLY'],
+  ['Honley High','H','HON'],
+  ['Honley JIN','JIN','HON'],
+  ['Howard Park','JIN','HOW'],
+  ['Huddersfield Grammar high','H','HUH'],
+  ['Huddersfield Grammar primary','JIN','HUP'],
+  ['Hyrstmount Junior','J','HYR'],
+  ['Joseph Norton Special','H','JNS'],
+  ['Kayes Academy','F','KAY'],
+  ['King James','H','KJS'],
+  ['Kirkburton First','F','KBF'],
+  ['Kirkburton Middle','M','KMS'],
+  ['Kirkheaton Primary','JIN','KHN'],
+  ['Lepton','JIN','LEP'],
+  ['Lindley CoE Infants','I','LII'],
+  ['Lindley Juniors','J','LIN'],
+  ['Linthwaite ARDRON','JIN','LWA'],
+  ['Linthwaite Clough','JIN','LWC'],
+  ['Littletown','JIN','LTT'],
+  ['Lowerhouses','JIN','LOW'],
+  ['Luck Lane','JIN','LLR'],
+  ['Lydgate J&I','JI','LYD'],
+  ['Manor Croft - Delta Academy','H','MCD'],
+  ['Manorfield Infants Batley','IN','MFB'],
+  ['Marsden Junior','J','MJS'],
+  ['Marsden Infant','IN','MIF'],
+  ['Meltham CoE Primary','JIN','MEL'],
+  ['Meltham Moor Primary','JIN','MMM'],
+  ['Mill Lane Primary','JIN','MLL'],
+  ['Millbridge Primary','JIN','MLB'],
+  ['Moldgreen Primary','JIN','MOG'],
+  ['Moor End Academy','H','MOD'],
+  ['Moorlands Primary','JIN','MOR'],
+  ['Mount Pleasant Primary','JIN','MPP'],
+  ['Netherhall Learning Campus (12-XXXL)','H','NLC'],
+  ['Netherhall Learning Campus (3-11)','JIN','NLC'],
+  ['Netherthong Primary','JIN','NEG'],
+  ['Netherton I&N','IN','NET'],
+  ['New Mill Infants & Juniors','JI','NMH'],
+  ['Newsome Academy','H','NWA'],
+  ['Newsome Junior Academy','J','NWJ'],
+  ['Nields J&I','JI','NEI'],
+  ['Norristhorpe','JI','NRR'],
+  ['North Huddersfield Trust','H','NHT'],
+  ['Oak Primary','JIN','OAK'],
+  ['Orchard Primary Academy','JIN','ORC'],
+  ['Our Lady of Lourdes Primary','JIN','OLL'],
+  ['Overthorpe CoE Primary','JIN','OVR'],
+  ['Paddock JIN','JIN','PAD'],
+  ['Park Road JIN','JIN','PRK'],
+  ['Pentland Infant & Nursery','IN','PEN'],
+  ['Plain Blazers','H','HPB'],
+  ['Purlwell I&N','IN','PUR'],
+  ['Rastrick High, Brighouse','H','RSK'],
+  ['Ravenshall Lower (Burgundy)','JIN','RVH'],
+  ['Ravenshall Secondary (Burgandy)','H','RVS'],
+  ['Ravensthorpe Junior','J','RVP'],
+  ['Reinwood Infants','IN','RIN'],
+  ['Reinwood Junior','J','REN'],
+  ['Roberttown Junior & Infants','JI','RTT'],
+  ['Rowley Lane JIN','JIN','RWY'],
+  ['Royds Hall Academy','H','RYD'],
+  ['Salendine Nook','H','SAL'],
+  ['Saville Town Infants & Nursery','IN','SAV'],
+  ['Scapegoat Hill','JI','SPE'],
+  ['Scholes School Holmfirth','JI','SHH'],
+  ['Scholes Village Primary','JIN','SVL'],
+  ['Scissett First Academy','F','SFA'],
+  ['Scissett Middle','M','SSS'],
+  ['Shaw Cross','IN','SHW'],
+  ['Shelley College','H','SHY'],
+  ['Shelley First','F','SYF'],
+  ['Shepley First','F','SPY'],
+  ['Skelmanthorpe Academy','F','SKE'],
+  ['Slaithwaite CoE J&I','JI','SWJ'],
+  ['South Crosland Junior','J','SCR'],
+  ['Southgate High','H','SOG'],
+  ['Southgate JIN','JIN','SOG'],
+  ['Spen Valley High','H','SPV'],
+  ['Spring Grove','JIN','SGR'],
+  ['St Aidians Academy','JIN','SAA'],
+  ['St John Fisher Academy Dewbury','H','SFF'],
+  ['St John\'s Golcar School Huddersfield','JIN','JGH'],
+  ['St John\'s Primary School Dewsbury','JIN','JID'],
+  ['St Joseph\'s Catholic Primary Academy Dewsbury','JIN','JPD'],
+  ['St Joseph\'s Catholic Primary Huddersfield','JIN','JPH'],
+  ['St Mary\'s Primary Academy Batley','JIN','MBA'],
+  ['St Patrick\'s School Academy Birstall','JIN','PKB'],
+  ['St Paulinus\' Academy','JIN','PAU'],
+  ['St Peter\'s Birstall','JIN','PTR'],
+  ['St Thomas\'s Primary','JIN','TOM'],
+  ['Staincliffe Junior','J','SFF'],
+  ['Thornhill Community Academy','H','TCA'],
+  ['Thornhill Junior & Infants','JI','THH'],
+  ['Thornhill Lees','IN','THL'],
+  ['Thurstonland First','F','TUF'],
+  ['Upper Batley Boys High','H','UBB'],
+  ['Upperthong J&I','JI','UPP'],
+  ['Warwick Road','JIN','WAR'],
+  ['Wellhouse J&I','JI','WEL'],
+  ['Westborough High','H','WST'],
+  ['Westmoor Primary','JIN','WSP'],
+  ['Whitcliffe Mount','H','WMH'],
+  ['Whitechapel Primary','JIN','WHC'],
+  ['Wilberlee J&I','JI','WIL'],
+  ['Windmill Primary','JIN','WND'],
+  ['Woodhouse primary','JIN','WHP'],
+  ['Woodley School Primary Side','JIN','WOO'],
+  ['Woodley School Secondary Side','H','WOO'],
+  ['Woodside Green Primary Academy','JIN','WGP'],
+  ['St Patrick\'s BIRKBY','JIN','PBY'],
+  ['MFG Mirfield Free Grammar','H','MFG'],
+];
+
+const existingSchoolTypes = new Map();
+const typeSnap = await getDocs(collection(db, 'schoolTypes'));
+typeSnap.forEach((docSnap) => {
+  const data = docSnap.data();
+  if (data?.skuCode) existingSchoolTypes.set(data.skuCode.toUpperCase(), true);
+});
+
+for (const [schoolName, schoolType, schoolIdCode] of schools) {
+  const normalizedSchoolName = schoolName.trim();
+  const normalizedType = schoolType.trim().toUpperCase();
+  const normalizedCode = schoolIdCode.trim().toUpperCase();
+  const normalizedSku = `${normalizedType}${normalizedCode}`;
+
+  const q = query(collection(db, 'schools'), where('name', '==', normalizedSchoolName));
+  const snap = await getDocs(q);
+
+  if (!snap.empty) {
+    console.log(`Skipping existing: ${normalizedSchoolName}`);
+    continue;
+  }
+
+  if (!existingSchoolTypes.has(normalizedType)) {
+    await addDoc(collection(db, 'schoolTypes'), {
+      name: normalizedType,
+      skuCode: normalizedType,
+      createdAt: new Date(),
+    });
+    existingSchoolTypes.set(normalizedType, true);
+    console.log(`Created school type: ${normalizedType}`);
+  }
+
+  await addDoc(collection(db, 'schools'), {
+    name: normalizedSchoolName,
+    schoolType: normalizedType,
+    schoolIdCode: normalizedCode,
+    skuCode: normalizedSku,
+    createdAt: new Date(),
+  });
+
+  console.log(`Added: ${normalizedSchoolName} -> ${normalizedSku}`);
+}
+
+console.log('Bulk school import completed.');
