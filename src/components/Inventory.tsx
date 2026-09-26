@@ -99,27 +99,63 @@ export default function Inventory({
         </button>
       </div>
 
-      {/* DATA TABLE */}
+      {/* DATA TABLE / CARDS */}
       <div className="bg-white border border-slate-200 rounded-3xl shadow-xs overflow-hidden w-full">
-        <div className={`grid gap-4 p-4 bg-slate-50 font-black text-slate-500 uppercase tracking-wider text-[10px] border-b ${showSchoolColumn ? 'grid-cols-7' : 'grid-cols-6'}`}>
-          {showSchoolColumn && <div className="pl-1">School</div>}
-          <div>Type</div>
-          <div className="text-center">Size</div>
-          <div>Colour</div>
-          <div>Location</div>
-          <div className="text-right">Qty</div>
-          <div className="text-right pr-2">Actions</div>
+        <div className="hidden md:block">
+          <div className={`grid gap-4 p-4 bg-slate-50 font-black text-slate-500 uppercase tracking-wider text-[10px] border-b ${showSchoolColumn ? 'grid-cols-7' : 'grid-cols-6'}`}>
+            {showSchoolColumn && <div className="pl-1">School</div>}
+            <div>Type</div>
+            <div className="text-center">Size</div>
+            <div>Colour</div>
+            <div>Location</div>
+            <div className="text-right">Qty</div>
+            <div className="text-right pr-2">Actions</div>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {filteredInventory.map((item: any) => (
+              <div key={item.id} className={`grid gap-4 p-4 items-center text-xs font-bold text-slate-700 ${showSchoolColumn ? 'grid-cols-7' : 'grid-cols-6'}`}>
+                {showSchoolColumn && <div className="truncate font-black">{item.schoolName || '-'}</div>}
+                <div className="text-brand-primary uppercase tracking-wide truncate">{item.clothingType}</div>
+                <div className="text-center font-mono bg-slate-100 px-1.5 py-0.5 rounded-md border w-max mx-auto">{item.size}</div>
+                <div className="text-slate-500 truncate">{item.colour}</div>
+                <div className="font-extrabold">{item.location || 'Hub'}</div>
+                <div className="text-right"><span className="px-2 py-0.5 rounded-lg border bg-slate-50">{item.quantity}</span></div>
+                <div className="text-right pr-1"><button onClick={() => handleSecureDeleteItem(item.id, item.clothingType)} className="p-1.5 text-slate-300 hover:text-rose-600"><Trash2 className="w-3.5 h-3.5" /></button></div>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="divide-y divide-slate-100">
+
+        <div className="md:hidden p-3 space-y-3">
           {filteredInventory.map((item: any) => (
-            <div key={item.id} className={`grid gap-4 p-4 items-center text-xs font-bold text-slate-700 ${showSchoolColumn ? 'grid-cols-7' : 'grid-cols-6'}`}>
-              {showSchoolColumn && <div className="truncate font-black">{item.schoolName || '-'}</div>}
-              <div className="text-brand-primary uppercase tracking-wide truncate">{item.clothingType}</div>
-              <div className="text-center font-mono bg-slate-100 px-1.5 py-0.5 rounded-md border w-max mx-auto">{item.size}</div>
-              <div className="text-slate-500 truncate">{item.colour}</div>
-              <div className="font-extrabold">{item.location || 'Hub'}</div>
-              <div className="text-right"><span className="px-2 py-0.5 rounded-lg border bg-slate-50">{item.quantity}</span></div>
-              <div className="text-right pr-1"><button onClick={() => handleSecureDeleteItem(item.id, item.clothingType)} className="p-1.5 text-slate-300 hover:text-rose-600"><Trash2 className="w-3.5 h-3.5" /></button></div>
+            <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3 shadow-xs">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  {showSchoolColumn && (
+                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 truncate">{item.schoolName || 'School'}</p>
+                  )}
+                  <h4 className="mt-1 text-sm font-black text-slate-900 truncate">{item.clothingType}</h4>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="inline-flex items-center justify-center min-w-[2.5rem] rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-black text-slate-700">{item.quantity}</span>
+                  <button onClick={() => handleSecureDeleteItem(item.id, item.clothingType)} className="p-1.5 rounded-lg bg-white text-slate-300 hover:text-rose-600 border border-slate-200"><Trash2 className="w-3.5 h-3.5" /></button>
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+                <div className="rounded-xl border border-slate-200 bg-white p-2">
+                  <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Size</span>
+                  <span className="mt-1 block font-black text-slate-800">{item.size}</span>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-2">
+                  <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Colour</span>
+                  <span className="mt-1 block font-black text-slate-800 truncate">{item.colour}</span>
+                </div>
+                <div className="col-span-2 rounded-xl border border-slate-200 bg-white p-2">
+                  <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Location</span>
+                  <span className="mt-1 block font-black text-slate-800">{item.location || 'Hub'}</span>
+                </div>
+              </div>
             </div>
           ))}
         </div>
