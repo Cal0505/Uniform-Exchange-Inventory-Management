@@ -72,6 +72,31 @@ export default function ManagementDashboard({
   const [newSizeName, setNewSizeName] = useState<string>('');
   const [newSizeLabel, setNewSizeLabel] = useState<string>('');
   const [newSizeSkuCode, setNewSizeSkuCode] = useState<string>('');
+  const [newSizeCategory, setNewSizeCategory] = useState<string>('Clothes');
+
+  const sizeCategories = useMemo(() => {
+    const values = Array.from(new Set(
+      sizes
+        .map((size) => String(size.category || '').trim())
+        .filter(Boolean)
+    ));
+
+    const defaults = [
+      'Clothes',
+      'Boys_Socks',
+      'Girls_Socks',
+      'Boys_Cozy_Socks',
+      'Girls_Cozy_Socks',
+      'Boys_Hat_sets',
+      'Girls_Hat_sets',
+      'Boys_Shoes',
+      'Girls_Shoes',
+      'One_Size',
+      'Other'
+    ];
+
+    return [...defaults, ...values].filter((value, index, arr) => arr.indexOf(value) === index);
+  }, [sizes]);
 
   // Colours Form States
   const [newColourName, setNewColourName] = useState<string>('');
@@ -559,11 +584,12 @@ export default function ManagementDashboard({
       batch.set(doc(collection(db, 'sizes')), {
         name: newSizeName.trim(),
         label: newSizeLabel.trim() || newSizeName.trim(),
-        skuCode: newSizeSkuCode.trim().toUpperCase(), 
+        skuCode: newSizeSkuCode.trim().toUpperCase(),
+        category: newSizeCategory.trim() || 'Clothes',
         createdAt: new Date()
       });
       await batch.commit();
-      setNewSizeName(''); setNewSizeLabel(''); setNewSizeSkuCode('');
+      setNewSizeName(''); setNewSizeLabel(''); setNewSizeSkuCode(''); setNewSizeCategory('Clothes');
     } catch (err) { console.error(err); } finally { setIsSubmitting(false); }
   };
 
@@ -806,10 +832,15 @@ export default function ManagementDashboard({
               <h3 className="text-sm font-bold text-slate-900">Sizes</h3>
               <p className="text-xs text-slate-500">Create and edit size options and labels used across garments and categories.</p>
             </div>
-            <form onSubmit={handleAddSizeSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
+            <form onSubmit={handleAddSizeSubmit} className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
               <input type="text" value={newSizeName} onChange={(e) => setNewSizeName(e.target.value)} placeholder="Size Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
               <input type="text" value={newSizeLabel} onChange={(e) => setNewSizeLabel(e.target.value)} placeholder="Label" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
               <input type="text" value={newSizeSkuCode} onChange={(e) => setNewSizeSkuCode(e.target.value)} placeholder="SKU Code" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
+              <select value={newSizeCategory} onChange={(e) => setNewSizeCategory(e.target.value)} className="text-xs p-2 border border-slate-200 rounded-lg bg-white outline-none focus:border-[#00A896]">
+                {sizeCategories.map((category) => (
+                  <option key={category} value={category}>{category}</option>
+                ))}
+              </select>
               <button type="submit" className="bg-[#00A896] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm">Save New Size</button>
             </form>
 
@@ -817,7 +848,7 @@ export default function ManagementDashboard({
               <table className="w-full text-left border-collapse text-sm">
                 <thead>
                   <tr className="bg-slate-50 text-slate-500 uppercase text-[10px] border-b border-slate-200">
-                    <th className="py-2 px-4">Name</th> <th className="py-2 px-4">Label</th> <th className="py-2 px-4 text-[#FF6B35]">SKU Code</th> <th className="py-2 px-4 text-right">Actions</th>
+                    <th className="py-2 px-4">Name</th> <th className="py-2 px-4">Label</th> <th className="py-2 px-4">Category</th> <th className="py-2 px-4 text-[#FF6B35]">SKU Code</th> <th className="py-2 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -834,12 +865,23 @@ export default function ManagementDashboard({
                           {isRowEditing ? <input type="text" value={editFormFields.label || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, label: e.target.value }))} className="text-xs p-1 border rounded w-full" /> : <span className="text-slate-600">{sz.label}</span>}
                         </td>
                         <td className="py-2 px-4">
+                          {isRowEditing ? (
+                            <select value={editFormFields.category || 'Clothes'} onChange={(e) => setEditFormFields(prev => ({ ...prev, category: e.target.value }))} className="text-xs p-1 border rounded bg-white w-full">
+                              {sizeCategories.map((category) => (
+                                <option key={category} value={category}>{category}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className="text-slate-600 text-xs bg-slate-100 rounded px-1.5 py-0.5">{sz.category || 'Clothes'}</span>
+                          )}
+                        </td>
+                        <td className="py-2 px-4">
                           {isRowEditing ? <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="text-xs p-1 border rounded w-32 font-mono uppercase" /> : <span className="font-mono text-xs font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded inline-block">{sz.skuCode || 'NONE'}</span>}
                         </td>
                         <td className="py-2 px-4 text-right">
                           {isRowEditing ? (
                             <div className="inline-flex gap-2">
-                              <button type="button" onClick={() => handleSecureUpdateRecord('sizes', sz, { name: editFormFields.name?.trim(), label: editFormFields.label?.trim(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-1 bg-[#00A896] text-white rounded hover:bg-[#008f80]"><Check className="w-3.5 h-3.5" /></button>
+                              <button type="button" onClick={() => handleSecureUpdateRecord('sizes', sz, { name: editFormFields.name?.trim(), label: editFormFields.label?.trim(), category: editFormFields.category?.trim() || 'Clothes', skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-1 bg-[#00A896] text-white rounded hover:bg-[#008f80]"><Check className="w-3.5 h-3.5" /></button>
                               <button type="button" onClick={cancelInlineEditingRow} className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"><XCircle className="w-3.5 h-3.5" /></button>
                             </div>
                           ) : (
@@ -888,6 +930,18 @@ export default function ManagementDashboard({
                         )}
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-2 col-span-2">
+                        <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Category</span>
+                        {isRowEditing ? (
+                          <select value={editFormFields.category || 'Clothes'} onChange={(e) => setEditFormFields(prev => ({ ...prev, category: e.target.value }))} className="mt-1 w-full text-[11px] p-1 border rounded bg-slate-50">
+                            {sizeCategories.map((category) => (
+                              <option key={category} value={category}>{category}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="mt-1 block font-black text-slate-800">{sz.category || 'Clothes'}</span>
+                        )}
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-white p-2 col-span-2">
                         <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">SKU</span>
                         {isRowEditing ? (
                           <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="mt-1 w-full text-[11px] p-1 border rounded font-mono uppercase bg-slate-50" />
@@ -899,7 +953,7 @@ export default function ManagementDashboard({
 
                     {isRowEditing && (
                       <div className="mt-3 flex justify-end gap-2">
-                        <button type="button" onClick={() => handleSecureUpdateRecord('sizes', sz, { name: editFormFields.name?.trim(), label: editFormFields.label?.trim(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="px-3 py-1.5 rounded-lg bg-[#00A896] text-white text-[10px] font-black uppercase tracking-wider">Save</button>
+                        <button type="button" onClick={() => handleSecureUpdateRecord('sizes', sz, { name: editFormFields.name?.trim(), label: editFormFields.label?.trim(), category: editFormFields.category?.trim() || 'Clothes', skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="px-3 py-1.5 rounded-lg bg-[#00A896] text-white text-[10px] font-black uppercase tracking-wider">Save</button>
                         <button type="button" onClick={cancelInlineEditingRow} className="px-3 py-1.5 rounded-lg bg-slate-200 text-slate-700 text-[10px] font-black uppercase tracking-wider">Cancel</button>
                       </div>
                     )}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { School, ClothingType, Size, Colour, Location, Category } from '../types';
 import { db, handleFirestoreError, OperationType } from '../firebase';
@@ -16,6 +16,14 @@ interface AddStockModalProps {
   colours: Colour[];
   locations: Location[];
   defaultCategory?: string | null;
+}
+
+function normalizeKey(value: string) {
+  return (value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
 }
 
 export default function AddStockModal({
@@ -36,18 +44,38 @@ export default function AddStockModal({
     return ['Plain', 'Logo'];
   }, [categories]);
 
-  // Form Categories & Types
   const [formCategory, setFormCategory] = useState<string>('');
   const [formType, setFormType] = useState<'single' | 'vacpac'>('single');
+  const [selectedLocationId, setSelectedLocationId] = useState('');
+  const [shelfCode, setShelfCode] = useState('');
+  const [packNumber, setPackNumber] = useState<number>(1);
+  const [unitsPerPack, setUnitsPerPack] = useState<number>(10);
+  const [selectedSchoolId, setSelectedSchoolId] = useState('');
+  const [selectedColourId, setSelectedColourId] = useState('');
+  const [selectedTypeId, setSelectedTypeId] = useState('');
+  const [selectedSizeId, setSelectedSizeId] = useState('');
+  const [singlesQuantity, setSinglesQuantity] = useState<number>(5);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [formSuccess, setFormSuccess] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const effectiveCategoryName = useMemo(() => {
+    const explicit = (defaultCategory || formCategory || '').trim();
+    if (explicit) return explicit;
+    return categoryOptions[0] || 'Plain';
+  }, [defaultCategory, formCategory, categoryOptions]);
 
   const selectedCategoryMeta = useMemo(() => {
-    const lookup = formCategory?.trim();
+    const lookup = effectiveCategoryName.trim();
     if (!lookup) return undefined;
-    return categories.find((category) => {
-      const name = (category.name || '').trim().toLowerCase();
-      return name === lookup.toLowerCase() || category.id === lookup;
-    });
-  }, [categories, formCategory]);
+    return (
+      categories.find((category) => {
+        const name = (category.name || '').trim().toLowerCase();
+        return name === lookup.toLowerCase() || category.id === lookup;
+      }) ||
+      categories.find((category) => normalizeKey(category.name || '') === normalizeKey(lookup))
+    );
+  }, [categories, effectiveCategoryName]);
 
   const categoryPackagingType = String((selectedCategoryMeta as any)?.packagingType || '').trim().toLowerCase();
   const legacySingleFlag = selectedCategoryMeta ? (selectedCategoryMeta as any).hasSingles !== false : true;
@@ -71,10 +99,6 @@ export default function AddStockModal({
     return legacyBulkFlag;
   })();
 
-  const showPackagingQuestion = categorySupportsSingle && categorySupportsVacPac;
-  const categoryRequiresSchool = selectedCategoryMeta ? ((selectedCategoryMeta as any).hasSchool !== false && (selectedCategoryMeta as any).hasSchools !== false) : true;
-  const showSchoolQuestion = categoryRequiresSchool;
-
   const availableModes = useMemo(() => {
     const modes: Array<'single' | 'vacpac'> = [];
     if (categorySupportsSingle) modes.push('single');
@@ -82,42 +106,19 @@ export default function AddStockModal({
     return modes.length ? modes : ['single'];
   }, [categorySupportsSingle, categorySupportsVacPac]);
 
-  const supportsSingles = availableModes.includes('single');
-  const supportsVacPacs = availableModes.includes('vacpac');
+  const showPackagingQuestion = availableModes.length > 1;
+  const categoryRequiresSchool = useMemo(() => {
+    if (selectedCategoryMeta) {
+      return (selectedCategoryMeta as any).hasSchool !== false && (selectedCategoryMeta as any).hasSchools !== false;
+    }
+
+    const normalized = normalizeKey(effectiveCategoryName);
+    return normalized !== 'plain' && normalized !== 'logo' && normalized !== 'new';
+  }, [effectiveCategoryName, selectedCategoryMeta]);
 
   useEffect(() => {
-    if (!supportsSingles && supportsVacPacs) {
-      setFormType('vacpac');
-      return;
-    }
+    if (!isOpen) return;
 
-    if (!supportsVacPacs && supportsSingles) {
-      setFormType('single');
-      return;
-    }
-
-    if (!supportsSingles && !supportsVacPacs) {
-      setFormType('single');
-    }
-  }, [supportsSingles, supportsVacPacs]);
-
-  // Form selections
-  const [selectedLocationId, setSelectedLocationId] = useState('');
-  const [shelfCode, setShelfCode] = useState('');
-  const [packNumber, setPackNumber] = useState<number>(1);
-  const [unitsPerPack, setUnitsPerPack] = useState<number>(10);
-  
-  const [selectedSchoolId, setSelectedSchoolId] = useState('');
-  const [selectedColourId, setSelectedColourId] = useState('');
-  const [selectedTypeId, setSelectedTypeId] = useState('');
-  const [selectedSizeId, setSelectedSizeId] = useState('');
-  const [singlesQuantity, setSinglesQuantity] = useState<number>(5);
-
-  const [formError, setFormError] = useState<string | null>(null);
-  const [formSuccess, setFormSuccess] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
     const preferredCategory = defaultCategory && defaultCategory.trim()
       ? defaultCategory.trim()
       : categoryOptions[0] || 'Plain';
@@ -128,10 +129,8 @@ export default function AddStockModal({
     });
 
     const nextCategory = match ? (match.name || match.id) : preferredCategory;
-    if (!formCategory || formCategory !== nextCategory) {
-      setFormCategory(nextCategory);
-    }
-  }, [defaultCategory, categories, categoryOptions, formCategory]);
+    setFormCategory(nextCategory);
+  }, [defaultCategory, categories, categoryOptions, isOpen]);
 
   useEffect(() => {
     if (!availableModes.includes(formType)) {
@@ -139,86 +138,122 @@ export default function AddStockModal({
     }
   }, [availableModes, formType]);
 
-  // Initialize selections on load or form type toggle
   useEffect(() => {
-    const targetProfile = formType === 'single' ? 'Pickers Shelf' : 'VacPac Storage Area';
-    const matchingLocs = locations.filter(l => !l.ruleProfile || l.ruleProfile === targetProfile);
+    if (!locations.length) {
+      setSelectedLocationId('');
+      return;
+    }
 
-    if (matchingLocs.length > 0) {
-      const currentSelectionIsValid = matchingLocs.some(l => l.id === selectedLocationId);
-      if (!currentSelectionIsValid) {
-        setSelectedLocationId(matchingLocs[0].id);
-      }
-    } else if (locations.length > 0) {
-      setSelectedLocationId(locations[0].id);
+    const targetProfile = formType === 'single' ? 'Pickers Shelf' : 'VacPac Storage Area';
+    const visibleLocations = locations.filter(
+      (location) => !location.ruleProfile || location.ruleProfile === targetProfile,
+    );
+    const nextChoices = visibleLocations.length ? visibleLocations : locations;
+    const stillValid = nextChoices.some((location) => location.id === selectedLocationId);
+
+    if (!selectedLocationId || !stillValid) {
+      setSelectedLocationId(nextChoices[0].id);
     }
   }, [formType, locations, selectedLocationId]);
 
-  const selectedType = useMemo(() => {
-    return clothingTypes.find(t => t.id === selectedTypeId);
-  }, [clothingTypes, selectedTypeId]);
+  const selectedType = useMemo(
+    () => clothingTypes.find((type) => type.id === selectedTypeId),
+    [clothingTypes, selectedTypeId],
+  );
 
   const filteredSizes = useMemo(() => {
     if (!selectedType) return sizes;
-    const targetCategory = getSizeCategoryForGarment(selectedType.name);
-    return sizes.filter(s => (s.category || 'Clothes').toLowerCase() === targetCategory.toLowerCase());
+    const targetKey = normalizeKey(getSizeCategoryForGarment(selectedType.name));
+    return sizes.filter((size) => normalizeKey(size.category || 'Clothes') === targetKey);
   }, [sizes, selectedType]);
 
   useEffect(() => {
-    if (colours.length > 0 && !selectedColourId) setSelectedColourId(colours[0].id);
-    if (clothingTypes.length > 0 && !selectedTypeId) setSelectedTypeId(clothingTypes[0].id);
-  }, [colours, clothingTypes]);
+    if (!clothingTypes.length) {
+      setSelectedTypeId('');
+      return;
+    }
+
+    if (!selectedTypeId || !clothingTypes.some((type) => type.id === selectedTypeId)) {
+      setSelectedTypeId(clothingTypes[0].id);
+    }
+  }, [clothingTypes, selectedTypeId]);
 
   useEffect(() => {
+    if (!colours.length) {
+      setSelectedColourId('');
+      return;
+    }
+
+    if (!selectedColourId || !colours.some((colour) => colour.id === selectedColourId)) {
+      setSelectedColourId(colours[0].id);
+    }
+  }, [colours, selectedColourId]);
+
+  useEffect(() => {
+    if (!schools.length) {
+      setSelectedSchoolId('');
+      return;
+    }
+
     if (!categoryRequiresSchool) {
       setSelectedSchoolId('');
       return;
     }
 
-    if (schools.length > 0) {
-      const allowedSchoolIds = new Set(schools.map((school) => school.id));
-      const currentValid = selectedSchoolId && allowedSchoolIds.has(selectedSchoolId);
-      if (!currentValid) {
-        setSelectedSchoolId(schools[0].id);
-      }
+    if (!selectedSchoolId || !schools.some((school) => school.id === selectedSchoolId)) {
+      setSelectedSchoolId(schools[0].id);
     }
   }, [categoryRequiresSchool, schools, selectedSchoolId]);
 
-  // Synchronize size selection with the selected type's size category
   useEffect(() => {
-    if (filteredSizes.length > 0) {
-      const isCurrentSizeValid = filteredSizes.some(s => s.id === selectedSizeId);
-      if (!isCurrentSizeValid) {
-        setSelectedSizeId(filteredSizes[0].id);
-      }
-    } else if (sizes.length > 0 && !selectedSizeId) {
-      setSelectedSizeId(sizes[0].id);
-    }
-  }, [filteredSizes, selectedSizeId, sizes]);
+    if (!selectedType) return;
 
-  // Automatically adjust Plain vs Logo category based on supported flags
+    if (filteredSizes.length === 0) {
+      setSelectedSizeId('');
+      return;
+    }
+
+    if (!selectedSizeId || !filteredSizes.some((size) => size.id === selectedSizeId)) {
+      setSelectedSizeId(filteredSizes[0].id);
+    }
+  }, [selectedType, filteredSizes, selectedSizeId]);
+
   useEffect(() => {
-    if (selectedType) {
-      const supportsLogo = selectedType.logo !== false;
-      const supportsPlain = selectedType.plain !== false;
-      if (!supportsLogo && formCategory === 'Logo') {
-        setFormCategory('Plain');
-      } else if (!supportsPlain && formCategory === 'Plain') {
-        setFormCategory('Logo');
-      }
+    if (!selectedType || !formCategory) return;
+
+    const currentCategory = formCategory.trim();
+    if (!['Logo', 'Plain'].includes(currentCategory)) {
+      return;
+    }
+
+    const supportsLogo = selectedType.logo !== false;
+    const supportsPlain = selectedType.plain !== false;
+
+    if (!supportsLogo && currentCategory !== 'Plain') {
+      setFormCategory('Plain');
+      return;
+    }
+
+    if (!supportsPlain && currentCategory !== 'Logo') {
+      setFormCategory('Logo');
     }
   }, [selectedType, formCategory]);
 
-  const selectedLocation = locations.find(l => l.id === selectedLocationId);
-  const selectedSchool = schools.find(s => s.id === selectedSchoolId);
-  const selectedColour = colours.find(c => c.id === selectedColourId);
-  const selectedSize = sizes.find(s => s.id === selectedSizeId);
-  const selectedCategory = categories.find((category) => (category.name || '').toLowerCase() === (formCategory || '').toLowerCase());
+  const selectedLocation = locations.find((location) => location.id === selectedLocationId);
+  const selectedSchool = schools.find((school) => school.id === selectedSchoolId);
+  const selectedColour = colours.find((colour) => colour.id === selectedColourId);
+  const selectedSize = sizes.find((size) => size.id === selectedSizeId);
+  const selectedCategory = categories.find(
+    (category) => normalizeKey(category.name || '') === normalizeKey(effectiveCategoryName || ''),
+  );
 
-  // SKU ID dynamic compiler
   const getCompiledSkuPreview = () => {
-    if (!selectedSchool || !selectedColour || !selectedType || !selectedSize || !selectedLocation) {
+    if (!selectedColour || !selectedType || !selectedSize || !selectedLocation) {
       return 'Awaiting selections...';
+    }
+
+    if (categoryRequiresSchool && !selectedSchool) {
+      return 'Awaiting school selection...';
     }
 
     if (formType === 'single') {
@@ -229,25 +264,26 @@ export default function AddStockModal({
         ruleProfile: 'Pickers Shelf',
         locationSku: selectedLocation.skuCode,
         shelfCode: shelfCode.toUpperCase().trim(),
-        schoolSku: selectedSchool.skuCode,
-        colourSku: selectedColour.skuCode,
-        typeSku: selectedType.skuCode,
-        sizeSku: selectedSize.skuCode,
-      });
-    } else {
-      if (packNumber <= 0) {
-        return 'Enter valid pack number';
-      }
-      return generateSkuid({
-        ruleProfile: 'VacPac Storage Area',
-        locationSku: selectedLocation.skuCode,
-        packNumber,
-        schoolSku: selectedSchool.skuCode,
+        schoolSku: selectedSchool?.skuCode || 'N/A',
         colourSku: selectedColour.skuCode,
         typeSku: selectedType.skuCode,
         sizeSku: selectedSize.skuCode,
       });
     }
+
+    if (packNumber <= 0) {
+      return 'Enter valid pack number';
+    }
+
+    return generateSkuid({
+      ruleProfile: 'VacPac Storage Area',
+      locationSku: selectedLocation.skuCode,
+      packNumber,
+      schoolSku: selectedSchool?.skuCode || 'N/A',
+      colourSku: selectedColour.skuCode,
+      typeSku: selectedType.skuCode,
+      sizeSku: selectedSize.skuCode,
+    });
   };
 
   const handleAddInventory = async (e: React.FormEvent) => {
@@ -306,14 +342,12 @@ export default function AddStockModal({
 
     try {
       const cleanShelf = isPickers ? shelfCode.trim().toUpperCase() : '';
-      const fallbackSchoolId = selectedSchool?.id || 'N/A';
-      const fallbackSchoolSku = selectedSchool?.skuCode || 'N/A';
       const skuid = generateSkuid({
         ruleProfile: isPickers ? 'Pickers Shelf' : 'VacPac Storage Area',
         locationSku: selectedLocation.skuCode,
         shelfCode: cleanShelf,
         packNumber: isPickers ? undefined : packNumber,
-        schoolSku: fallbackSchoolSku,
+        schoolSku: selectedSchool?.skuCode || 'N/A',
         colourSku: selectedColour.skuCode,
         typeSku: selectedType.skuCode,
         sizeSku: selectedSize.skuCode,
@@ -356,7 +390,7 @@ export default function AddStockModal({
           }
         });
 
-        setFormSuccess(`Stored ${singlesQuantity} Singles onto shelf ${cleanShelf} successfully.`);
+        setFormSuccess(`Stored ${singlesQuantity} singles onto shelf ${cleanShelf} successfully.`);
       } else {
         const docId = skuid;
         const docRef = doc(db, 'inventory', docId);
@@ -383,7 +417,7 @@ export default function AddStockModal({
         });
 
         setFormSuccess(`Stored VacPac #${packNumber} with ${unitsPerPack} items successfully.`);
-        setPackNumber(prev => prev + 1);
+        setPackNumber((current) => current + 1);
       }
     } catch (err: any) {
       handleFirestoreError(err, OperationType.WRITE, 'inventory');
@@ -393,14 +427,10 @@ export default function AddStockModal({
     }
   };
 
-
-
-  
   return (
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm">
-          {/* Backdrop clickaway */}
           <div className="absolute inset-0" onClick={onClose} />
 
           <motion.div
@@ -410,13 +440,13 @@ export default function AddStockModal({
             transition={{ type: 'spring', duration: 0.4 }}
             className="bg-white rounded-3xl shadow-2xl max-w-lg w-full border border-slate-100 overflow-hidden relative z-10"
           >
-            {/* Header */}
             <div className="bg-primary text-white p-5 flex justify-between items-center">
               <div>
                 <h3 className="font-display font-bold text-lg">Add New Stock Unit</h3>
                 <p className="text-xs opacity-90">Kirklees School Uniform Exchange</p>
               </div>
               <button
+                type="button"
                 onClick={onClose}
                 className="p-1.5 rounded-full hover:bg-white/10 transition-all text-white"
               >
@@ -439,14 +469,7 @@ export default function AddStockModal({
                 </div>
               )}
 
-              {/* Dynamic Step 1: Category */}
-              {defaultCategory || categoryOptions.length === 1 ? (
-                <div>
-                  <div className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 flex items-center justify-between">
-                    <span>{formCategory || defaultCategory || categoryOptions[0]}</span>
-                  </div>
-                </div>
-              ) : (
+              {!defaultCategory && categoryOptions.length > 1 ? (
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
                     Uniform Category
@@ -463,6 +486,12 @@ export default function AddStockModal({
                     ))}
                   </select>
                 </div>
+              ) : (
+                <div>
+                  <div className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 flex items-center justify-between">
+                    <span>{effectiveCategoryName}</span>
+                  </div>
+                </div>
               )}
 
               {showPackagingQuestion && (
@@ -476,9 +505,7 @@ export default function AddStockModal({
                         type="button"
                         onClick={() => setFormType('single')}
                         className={`py-2 px-3 rounded-xl text-xs font-bold transition-all ${
-                          formType === 'single'
-                            ? 'bg-white text-primary shadow-sm'
-                            : 'text-slate-600 hover:text-slate-900'
+                          formType === 'single' ? 'bg-white text-primary shadow-sm' : 'text-slate-600 hover:text-slate-900'
                         }`}
                       >
                         Single (Loose Items)
@@ -489,9 +516,7 @@ export default function AddStockModal({
                         type="button"
                         onClick={() => setFormType('vacpac')}
                         className={`py-2 px-3 rounded-xl text-xs font-bold transition-all ${
-                          formType === 'vacpac'
-                            ? 'bg-white text-primary shadow-sm'
-                            : 'text-slate-600 hover:text-slate-900'
+                          formType === 'vacpac' ? 'bg-white text-primary shadow-sm' : 'text-slate-600 hover:text-slate-900'
                         }`}
                       >
                         VacPac (Bulk Bundle)
@@ -501,7 +526,6 @@ export default function AddStockModal({
                 </div>
               )}
 
-              {/* Step 3: Specifics depending on Single vs VacPac */}
               <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-4">
                 <span className="block text-xs font-extrabold text-secondary tracking-wider uppercase">
                   Location & Stock Value
@@ -518,10 +542,14 @@ export default function AddStockModal({
                     required
                   >
                     {locations
-                      .filter(l => !l.ruleProfile || l.ruleProfile === (formType === 'single' ? 'Pickers Shelf' : 'VacPac Storage Area'))
-                      .map(l => (
-                        <option key={l.id} value={l.id}>
-                          {l.name}
+                      .filter(
+                        (location) =>
+                          !location.ruleProfile ||
+                          location.ruleProfile === (formType === 'single' ? 'Pickers Shelf' : 'VacPac Storage Area'),
+                      )
+                      .map((location) => (
+                        <option key={location.id} value={location.id}>
+                          {location.name}
                         </option>
                       ))}
                   </select>
@@ -591,8 +619,7 @@ export default function AddStockModal({
                 )}
               </div>
 
-              {/* Step 4: Common traits */}
-              {showSchoolQuestion && (
+              {categoryRequiresSchool && (
                 <div className="space-y-3.5 pt-1">
                   <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
                     Clothing Item Traits
@@ -609,9 +636,9 @@ export default function AddStockModal({
                         className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-primary focus:bg-white transition"
                         required
                       >
-                        {schools.map(s => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
+                        {schools.map((school) => (
+                          <option key={school.id} value={school.id}>
+                            {school.name}
                           </option>
                         ))}
                       </select>
@@ -627,9 +654,9 @@ export default function AddStockModal({
                         className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-primary focus:bg-white transition"
                         required
                       >
-                        {clothingTypes.map(t => (
-                          <option key={t.id} value={t.id}>
-                            {t.name}
+                        {clothingTypes.map((type) => (
+                          <option key={type.id} value={type.id}>
+                            {type.name}
                           </option>
                         ))}
                       </select>
@@ -645,9 +672,9 @@ export default function AddStockModal({
                         className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-primary focus:bg-white transition"
                         required
                       >
-                        {colours.map(c => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
+                        {colours.map((colour) => (
+                          <option key={colour.id} value={colour.id}>
+                            {colour.name}
                           </option>
                         ))}
                       </select>
@@ -663,18 +690,22 @@ export default function AddStockModal({
                         className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-primary focus:bg-white transition"
                         required
                       >
-                        {filteredSizes.map(s => (
-                          <option key={s.id} value={s.id}>
-                            {s.label} {(s.category && s.category !== 'Clothes') ? `(${s.category})` : ''}
-                          </option>
-                        ))}
+                        {filteredSizes.length > 0 ? (
+                          filteredSizes.map((size) => (
+                            <option key={size.id} value={size.id}>
+                              {size.label} {size.category && size.category !== 'Clothes' ? `(${size.category})` : ''}
+                            </option>
+                          ))
+                        ) : (
+                          <option value="">No sizes available</option>
+                        )}
                       </select>
                     </div>
                   </div>
                 </div>
               )}
 
-              {!showSchoolQuestion && (
+              {!categoryRequiresSchool && (
                 <div className="space-y-3.5 pt-1">
                   <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
                     Clothing Item Traits
@@ -691,9 +722,9 @@ export default function AddStockModal({
                         className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-primary focus:bg-white transition"
                         required
                       >
-                        {clothingTypes.map(t => (
-                          <option key={t.id} value={t.id}>
-                            {t.name}
+                        {clothingTypes.map((type) => (
+                          <option key={type.id} value={type.id}>
+                            {type.name}
                           </option>
                         ))}
                       </select>
@@ -709,9 +740,9 @@ export default function AddStockModal({
                         className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-primary focus:bg-white transition"
                         required
                       >
-                        {colours.map(c => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
+                        {colours.map((colour) => (
+                          <option key={colour.id} value={colour.id}>
+                            {colour.name}
                           </option>
                         ))}
                       </select>
@@ -727,18 +758,28 @@ export default function AddStockModal({
                         className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-primary focus:bg-white transition"
                         required
                       >
-                        {filteredSizes.map(s => (
-                          <option key={s.id} value={s.id}>
-                            {s.label} {(s.category && s.category !== 'Clothes') ? `(${s.category})` : ''}
-                          </option>
-                        ))}
+                        {filteredSizes.length > 0 ? (
+                          filteredSizes.map((size) => (
+                            <option key={size.id} value={size.id}>
+                              {size.label} {size.category && size.category !== 'Clothes' ? `(${size.category})` : ''}
+                            </option>
+                          ))
+                        ) : (
+                          <option value="">No sizes available</option>
+                        )}
                       </select>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Submit Button */}
+              <div className="border border-slate-200 rounded-2xl bg-slate-50 p-3">
+                <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 mb-1">
+                  SKU Preview
+                </div>
+                <div className="font-mono text-[11px] text-slate-700 break-all">{getCompiledSkuPreview()}</div>
+              </div>
+
               <div className="flex gap-3 pt-1">
                 <button
                   type="button"

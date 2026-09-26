@@ -90,15 +90,6 @@ export default function Inventory({
     return item.locationSku || 'Hub';
   };
 
-  const getExtraFieldLabel = () => {
-    if (newItem.packagingType === 'Single') return 'Shelf';
-    if (newItem.packagingType === 'VacPac') return 'VacPac ID';
-    if (newItem.packagingType === 'Both') {
-      return newItem.location === 'Pickers Shelf' ? 'Shelf' : 'VacPac ID';
-    }
-    return 'Details';
-  };
-
   const filteredInventory = useMemo(() => {
     return (inventory || []).filter(item => {
       const itemCategoryId = item.categoryId || '';
