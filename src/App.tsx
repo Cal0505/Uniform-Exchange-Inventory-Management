@@ -145,7 +145,7 @@ function MainApp() {
         currentUserWeight={currentUserWeight}
         handleSignOut={handleSignOut} isFirebaseConnected={isFirebaseConnected} loading={!!dataPool.loading}
       />
-      <main className="flex-1 p-4 md:p-8 xl:pl-72 overflow-x-hidden w-full">
+      <main className="flex-1 p-4 md:p-8 xl:pl-72 pt-16 md:pt-20 xl:pt-4 overflow-x-hidden w-full">
         {effectiveMainTab === null && <HomeLanding categories={dataPool.categories || []} schools={mappedSchools} inventory={dataPool.inventory || []} userRole={userRole} loggedInEmail={user.email || ''} newsFeed={newsFeed} tasksList={tasksList} users={dataPool.users || []} />}
         {/* Render the new Training component here! */}
         {effectiveMainTab === 'training' && <Training userRole={userRole} loggedInEmail={user.email || ''} users={dataPool.users || []} />}
