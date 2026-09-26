@@ -24,7 +24,14 @@ interface AdvancedSchool {
 }
 
 interface AdvancedAttribute {
-  id: string; name?: string; label?: string; skuCode: string; ruleProfile?: string;
+  id: string;
+  name?: string;
+  label?: string;
+  skuCode: string;
+  ruleProfile?: string;
+  logo?: boolean;
+  plain?: boolean;
+  new?: boolean;
 }
 
 function MainApp() {
@@ -120,7 +127,15 @@ function MainApp() {
   }));
 
   const mapAttribute = (arr: any[]): AdvancedAttribute[] => (arr || []).map((a: any) => ({
-    id: a.id, name: a.name, label: a.label, skuCode: a.skuCode || '', ruleProfile: a.ruleProfile
+    ...a,
+    id: a.id,
+    name: a.name,
+    label: a.label,
+    skuCode: a.skuCode || '',
+    ruleProfile: a.ruleProfile,
+    logo: typeof a.logo === 'boolean' ? a.logo : undefined,
+    plain: typeof a.plain === 'boolean' ? a.plain : undefined,
+    new: typeof a.new === 'boolean' ? a.new : undefined,
   }));
 
   const currentUserRoleObj = (dataPool.roles || []).find((r: any) => (r.name || '').toLowerCase() === userRole?.toLowerCase());

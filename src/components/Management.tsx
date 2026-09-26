@@ -66,6 +66,7 @@ export default function ManagementDashboard({
   // Clothing Types Form States
   const [newClothingTypeName, setNewClothingTypeName] = useState<string>('');
   const [newClothingTypeSkuCode, setNewClothingTypeSkuCode] = useState<string>('');
+  const [newClothingTypeFlags, setNewClothingTypeFlags] = useState({ logo: true, plain: true, new: true });
 
   // Sizes Form States
   const [newSizeName, setNewSizeName] = useState<string>('');
@@ -535,12 +536,18 @@ export default function ManagementDashboard({
     try {
       setIsSubmitting(true);
       const batch = writeBatch(db);
-      batch.set(doc(collection(db, 'clothingTypes')), { 
-        name: newClothingTypeName.trim(), 
-        skuCode: newClothingTypeSkuCode.trim().toUpperCase(), 
-        createdAt: new Date() 
+      batch.set(doc(collection(db, 'clothingTypes')), {
+        name: newClothingTypeName.trim(),
+        skuCode: newClothingTypeSkuCode.trim().toUpperCase(),
+        logo: newClothingTypeFlags.logo,
+        plain: newClothingTypeFlags.plain,
+        new: newClothingTypeFlags.new,
+        createdAt: new Date()
       });
-      await batch.commit(); setNewClothingTypeName(''); setNewClothingTypeSkuCode('');
+      await batch.commit();
+      setNewClothingTypeName('');
+      setNewClothingTypeSkuCode('');
+      setNewClothingTypeFlags({ logo: true, plain: true, new: true });
     } catch (err) { console.error(err); } finally { setIsSubmitting(false); }
   };
 
@@ -1205,9 +1212,22 @@ export default function ManagementDashboard({
               <h3 className="text-sm font-bold text-slate-900">Garment Types</h3>
               <p className="text-xs text-slate-500">Manage garment types used to classify inventory (e.g., shirts, trousers).</p>
             </div>
-            <form onSubmit={handleAddClothingTypeSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
+            <form onSubmit={handleAddClothingTypeSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
               <input type="text" value={newClothingTypeName} onChange={(e) => setNewClothingTypeName(e.target.value)} placeholder="Garment Type Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
               <input type="text" value={newClothingTypeSkuCode} onChange={(e) => setNewClothingTypeSkuCode(e.target.value)} placeholder="SKU Code" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />
+              <div className="flex items-center justify-center gap-4 rounded-lg border border-slate-200 bg-white px-2 py-2">
+                {(['logo', 'plain', 'new'] as const).map((flag) => (
+                  <label key={flag} className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={newClothingTypeFlags[flag]}
+                      onChange={(e) => setNewClothingTypeFlags(prev => ({ ...prev, [flag]: e.target.checked }))}
+                      className="h-3.5 w-3.5 accent-[#00A896]"
+                    />
+                    {flag}
+                  </label>
+                ))}
+              </div>
               <button type="submit" className="bg-[#00A896] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm">Add</button>
             </form>
             <div className="hidden md:block">
@@ -1230,10 +1250,35 @@ export default function ManagementDashboard({
                         <td className="py-2 px-4">
                           {isRowEditing ? <input type="text" value={editFormFields.skuCode || ''} onChange={(e) => setEditFormFields(prev => ({ ...prev, skuCode: e.target.value }))} className="text-xs p-1 border rounded w-32 font-mono uppercase" /> : <span className="font-mono text-xs font-bold text-indigo-600">{ct.skuCode || '-'}</span>}
                         </td>
+                        <td className="py-2 px-4">
+                          {isRowEditing ? (
+                            <div className="flex flex-wrap gap-2">
+                              {(['logo', 'plain', 'new'] as const).map((flag) => (
+                                <label key={flag} className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wide text-slate-500">
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(editFormFields[flag] ?? ct[flag] ?? true)}
+                                    onChange={(e) => setEditFormFields(prev => ({ ...prev, [flag]: e.target.checked }))}
+                                    className="h-3 w-3 accent-[#00A896]"
+                                  />
+                                  {flag}
+                                </label>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-2 text-[9px] font-black uppercase tracking-wide text-slate-500">
+                              {(['logo', 'plain', 'new'] as const).map((flag) => (
+                                <span key={flag} className={`rounded-full px-2 py-0.5 ${ct[flag] === false ? 'bg-slate-200 text-slate-500' : 'bg-emerald-100 text-emerald-700'}`}>
+                                  {flag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
                         <td className="py-2 px-4 text-right">
                           {isRowEditing ? (
                             <div className="inline-flex gap-2">
-                              <button type="button" onClick={() => handleSecureUpdateRecord('clothingTypes', ct, { name: editFormFields.name?.trim(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="p-1 bg-[#00A896] text-white rounded hover:bg-[#008f80]"><Check className="w-3.5 h-3.5" /></button>
+                              <button type="button" onClick={() => handleSecureUpdateRecord('clothingTypes', ct, { name: editFormFields.name?.trim(), skuCode: editFormFields.skuCode?.trim().toUpperCase(), logo: editFormFields.logo ?? ct.logo ?? true, plain: editFormFields.plain ?? ct.plain ?? true, new: editFormFields.new ?? ct.new ?? true })} className="p-1 bg-[#00A896] text-white rounded hover:bg-[#008f80]"><Check className="w-3.5 h-3.5" /></button>
                               <button type="button" onClick={cancelInlineEditingRow} className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"><XCircle className="w-3.5 h-3.5" /></button>
                             </div>
                           ) : (
@@ -1281,9 +1326,36 @@ export default function ManagementDashboard({
                       )}
                     </div>
 
+                    {isRowEditing ? (
+                      <div className="mt-3 rounded-xl border border-slate-200 bg-white p-2">
+                        <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400 mb-2">Visible in</span>
+                        <div className="flex flex-wrap gap-2">
+                          {(['logo', 'plain', 'new'] as const).map((flag) => (
+                            <label key={flag} className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wide text-slate-600">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(editFormFields[flag] ?? ct[flag] ?? true)}
+                                onChange={(e) => setEditFormFields(prev => ({ ...prev, [flag]: e.target.checked }))}
+                                className="h-3.5 w-3.5 accent-[#00A896]"
+                              />
+                              {flag}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {(['logo', 'plain', 'new'] as const).map((flag) => (
+                          <span key={flag} className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ${ct[flag] === false ? 'bg-slate-200 text-slate-500' : 'bg-emerald-100 text-emerald-700'}`}>
+                            {flag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
                     {isRowEditing && (
                       <div className="mt-3 flex justify-end gap-2">
-                        <button type="button" onClick={() => handleSecureUpdateRecord('clothingTypes', ct, { name: editFormFields.name?.trim(), skuCode: editFormFields.skuCode?.trim().toUpperCase() })} className="px-3 py-1.5 rounded-lg bg-[#00A896] text-white text-[10px] font-black uppercase tracking-wider">Save</button>
+                        <button type="button" onClick={() => handleSecureUpdateRecord('clothingTypes', ct, { name: editFormFields.name?.trim(), skuCode: editFormFields.skuCode?.trim().toUpperCase(), logo: editFormFields.logo ?? ct.logo ?? true, plain: editFormFields.plain ?? ct.plain ?? true, new: editFormFields.new ?? ct.new ?? true })} className="px-3 py-1.5 rounded-lg bg-[#00A896] text-white text-[10px] font-black uppercase tracking-wider">Save</button>
                         <button type="button" onClick={cancelInlineEditingRow} className="px-3 py-1.5 rounded-lg bg-slate-200 text-slate-700 text-[10px] font-black uppercase tracking-wider">Cancel</button>
                       </div>
                     )}
