@@ -30,6 +30,15 @@ export default function Inventory({
   const activeCategoryObj = categories.find(c => c.id === currentViewedCategory);
   const showSchoolColumn = activeCategoryObj?.hasSchools ?? true;
 
+  const getSchoolName = (item: any) => {
+    if (item.schoolName) return item.schoolName;
+    if (item.schoolId) {
+      const match = schools.find((school: any) => school.id === item.schoolId);
+      if (match?.name) return match.name;
+    }
+    return 'General';
+  };
+
   const getExtraFieldLabel = () => {
     if (newItem.packagingType === 'Single') return 'Shelf';
     if (newItem.packagingType === 'VacPac') return 'VacPac ID';
@@ -114,7 +123,7 @@ export default function Inventory({
           <div className="divide-y divide-slate-100">
             {filteredInventory.map((item: any) => (
               <div key={item.id} className={`grid gap-4 p-4 items-center text-xs font-bold text-slate-700 ${showSchoolColumn ? 'grid-cols-7' : 'grid-cols-6'}`}>
-                {showSchoolColumn && <div className="truncate font-black">{item.schoolName || '-'}</div>}
+                {showSchoolColumn && <div className="truncate font-black">{getSchoolName(item)}</div>}
                 <div className="text-brand-primary uppercase tracking-wide truncate">{item.clothingType}</div>
                 <div className="text-center font-mono bg-slate-100 px-1.5 py-0.5 rounded-md border w-max mx-auto">{item.size}</div>
                 <div className="text-slate-500 truncate">{item.colour}</div>
@@ -132,7 +141,7 @@ export default function Inventory({
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   {showSchoolColumn && (
-                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 truncate">{item.schoolName || 'School'}</p>
+                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 truncate">{getSchoolName(item)}</p>
                   )}
                   <h4 className="mt-1 text-sm font-black text-slate-900 truncate">{item.clothingType}</h4>
                 </div>
