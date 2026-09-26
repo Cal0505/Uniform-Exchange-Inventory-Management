@@ -1,33 +1,105 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { School, ClothingType, Size, Colour, Location } from '../types';
+import { School, ClothingType, Size, Colour, Location, Category } from '../types';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { doc, runTransaction, setDoc, serverTimestamp } from 'firebase/firestore';
 import { generateSkuid, validateShelfCode, getSizeCategoryForGarment } from '../skuUtils';
-import { X, Sparkles, AlertTriangle, Info, Plus } from 'lucide-react';
+import { X, Sparkles, AlertTriangle, Plus } from 'lucide-react';
 
 interface AddStockModalProps {
   isOpen: boolean;
   onClose: () => void;
+  categories: Category[];
   schools: School[];
   clothingTypes: ClothingType[];
   sizes: Size[];
   colours: Colour[];
   locations: Location[];
+  defaultCategory?: string | null;
 }
 
 export default function AddStockModal({
   isOpen,
   onClose,
+  categories,
   schools,
   clothingTypes,
   sizes,
   colours,
   locations,
+  defaultCategory,
 }: AddStockModalProps) {
+  const categoryOptions = useMemo(() => {
+    if (categories.length > 0) {
+      return categories.map((category) => category.name || 'Unnamed Category');
+    }
+    return ['Plain', 'Logo'];
+  }, [categories]);
+
   // Form Categories & Types
-  const [formCategory, setFormCategory] = useState<'Plain' | 'Logo'>('Plain');
+  const [formCategory, setFormCategory] = useState<string>('');
   const [formType, setFormType] = useState<'single' | 'vacpac'>('single');
+
+  const selectedCategoryMeta = useMemo(() => {
+    const lookup = formCategory?.trim();
+    if (!lookup) return undefined;
+    return categories.find((category) => {
+      const name = (category.name || '').trim().toLowerCase();
+      return name === lookup.toLowerCase() || category.id === lookup;
+    });
+  }, [categories, formCategory]);
+
+  const categoryPackagingType = String((selectedCategoryMeta as any)?.packagingType || '').trim().toLowerCase();
+  const legacySingleFlag = selectedCategoryMeta ? (selectedCategoryMeta as any).hasSingles !== false : true;
+  const legacyBulkFlag = selectedCategoryMeta ? (selectedCategoryMeta as any).hasBulk !== false : true;
+
+  const categorySupportsSingle = (() => {
+    if (categoryPackagingType === 'single') return true;
+    if (categoryPackagingType === 'vacpac') return false;
+    if (categoryPackagingType === 'both') return true;
+    if ((selectedCategoryMeta as any)?.hasSingles === false) return false;
+    if ((selectedCategoryMeta as any)?.hasBulk === false) return true;
+    return legacySingleFlag;
+  })();
+
+  const categorySupportsVacPac = (() => {
+    if (categoryPackagingType === 'vacpac') return true;
+    if (categoryPackagingType === 'single') return false;
+    if (categoryPackagingType === 'both') return true;
+    if ((selectedCategoryMeta as any)?.hasBulk === false) return false;
+    if ((selectedCategoryMeta as any)?.hasSingles === false) return true;
+    return legacyBulkFlag;
+  })();
+
+  const showPackagingQuestion = categorySupportsSingle && categorySupportsVacPac;
+  const categoryRequiresSchool = selectedCategoryMeta ? ((selectedCategoryMeta as any).hasSchool !== false && (selectedCategoryMeta as any).hasSchools !== false) : true;
+  const showSchoolQuestion = categoryRequiresSchool;
+
+  const availableModes = useMemo(() => {
+    const modes: Array<'single' | 'vacpac'> = [];
+    if (categorySupportsSingle) modes.push('single');
+    if (categorySupportsVacPac) modes.push('vacpac');
+    return modes.length ? modes : ['single'];
+  }, [categorySupportsSingle, categorySupportsVacPac]);
+
+  const supportsSingles = availableModes.includes('single');
+  const supportsVacPacs = availableModes.includes('vacpac');
+
+  useEffect(() => {
+    if (!supportsSingles && supportsVacPacs) {
+      setFormType('vacpac');
+      return;
+    }
+
+    if (!supportsVacPacs && supportsSingles) {
+      setFormType('single');
+      return;
+    }
+
+    if (!supportsSingles && !supportsVacPacs) {
+      setFormType('single');
+    }
+  }, [supportsSingles, supportsVacPacs]);
 
   // Form selections
   const [selectedLocationId, setSelectedLocationId] = useState('');
@@ -45,14 +117,42 @@ export default function AddStockModal({
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    const preferredCategory = defaultCategory && defaultCategory.trim()
+      ? defaultCategory.trim()
+      : categoryOptions[0] || 'Plain';
+
+    const match = categories.find((category) => {
+      const name = (category.name || '').trim();
+      return name.toLowerCase() === preferredCategory.toLowerCase() || category.id === preferredCategory;
+    });
+
+    const nextCategory = match ? (match.name || match.id) : preferredCategory;
+    if (!formCategory || formCategory !== nextCategory) {
+      setFormCategory(nextCategory);
+    }
+  }, [defaultCategory, categories, categoryOptions, formCategory]);
+
+  useEffect(() => {
+    if (!availableModes.includes(formType)) {
+      setFormType(availableModes[0] as 'single' | 'vacpac');
+    }
+  }, [availableModes, formType]);
+
   // Initialize selections on load or form type toggle
   useEffect(() => {
     const targetProfile = formType === 'single' ? 'Pickers Shelf' : 'VacPac Storage Area';
-    const matchingLocs = locations.filter(l => l.ruleProfile === targetProfile);
+    const matchingLocs = locations.filter(l => !l.ruleProfile || l.ruleProfile === targetProfile);
+
     if (matchingLocs.length > 0) {
-      setSelectedLocationId(matchingLocs[0].id);
+      const currentSelectionIsValid = matchingLocs.some(l => l.id === selectedLocationId);
+      if (!currentSelectionIsValid) {
+        setSelectedLocationId(matchingLocs[0].id);
+      }
+    } else if (locations.length > 0) {
+      setSelectedLocationId(locations[0].id);
     }
-  }, [formType, locations]);
+  }, [formType, locations, selectedLocationId]);
 
   const selectedType = useMemo(() => {
     return clothingTypes.find(t => t.id === selectedTypeId);
@@ -65,10 +165,24 @@ export default function AddStockModal({
   }, [sizes, selectedType]);
 
   useEffect(() => {
-    if (schools.length > 0 && !selectedSchoolId) setSelectedSchoolId(schools[0].id);
     if (colours.length > 0 && !selectedColourId) setSelectedColourId(colours[0].id);
     if (clothingTypes.length > 0 && !selectedTypeId) setSelectedTypeId(clothingTypes[0].id);
-  }, [schools, colours, clothingTypes]);
+  }, [colours, clothingTypes]);
+
+  useEffect(() => {
+    if (!categoryRequiresSchool) {
+      setSelectedSchoolId('');
+      return;
+    }
+
+    if (schools.length > 0) {
+      const allowedSchoolIds = new Set(schools.map((school) => school.id));
+      const currentValid = selectedSchoolId && allowedSchoolIds.has(selectedSchoolId);
+      if (!currentValid) {
+        setSelectedSchoolId(schools[0].id);
+      }
+    }
+  }, [categoryRequiresSchool, schools, selectedSchoolId]);
 
   // Synchronize size selection with the selected type's size category
   useEffect(() => {
@@ -99,6 +213,7 @@ export default function AddStockModal({
   const selectedSchool = schools.find(s => s.id === selectedSchoolId);
   const selectedColour = colours.find(c => c.id === selectedColourId);
   const selectedSize = sizes.find(s => s.id === selectedSizeId);
+  const selectedCategory = categories.find((category) => (category.name || '').toLowerCase() === (formCategory || '').toLowerCase());
 
   // SKU ID dynamic compiler
   const getCompiledSkuPreview = () => {
@@ -141,8 +256,14 @@ export default function AddStockModal({
     setFormSuccess(null);
     setLoading(true);
 
-    if (!selectedLocation || !selectedSchool || !selectedColour || !selectedType || !selectedSize) {
+    if (!selectedLocation || !selectedColour || !selectedType || !selectedSize) {
       setFormError('Please complete all selection dropdowns.');
+      setLoading(false);
+      return;
+    }
+
+    if (categoryRequiresSchool && !selectedSchool) {
+      setFormError('This category requires a school selection.');
       setLoading(false);
       return;
     }
@@ -185,12 +306,14 @@ export default function AddStockModal({
 
     try {
       const cleanShelf = isPickers ? shelfCode.trim().toUpperCase() : '';
+      const fallbackSchoolId = selectedSchool?.id || 'N/A';
+      const fallbackSchoolSku = selectedSchool?.skuCode || 'N/A';
       const skuid = generateSkuid({
         ruleProfile: isPickers ? 'Pickers Shelf' : 'VacPac Storage Area',
         locationSku: selectedLocation.skuCode,
         shelfCode: cleanShelf,
         packNumber: isPickers ? undefined : packNumber,
-        schoolSku: selectedSchool.skuCode,
+        schoolSku: fallbackSchoolSku,
         colourSku: selectedColour.skuCode,
         typeSku: selectedType.skuCode,
         sizeSku: selectedSize.skuCode,
@@ -215,11 +338,12 @@ export default function AddStockModal({
               skuid,
               type: 'single',
               category: formCategory,
+              categoryId: selectedCategory?.id || formCategory,
               locationId: selectedLocation.id,
               locationSku: selectedLocation.skuCode,
               shelfCode: cleanShelf,
-              schoolId: selectedSchool.id,
-              schoolSku: selectedSchool.skuCode,
+              schoolId: selectedSchool?.id || 'N/A',
+              schoolSku: selectedSchool?.skuCode || 'N/A',
               colourId: selectedColour.id,
               colourSku: selectedColour.skuCode,
               typeId: selectedType.id,
@@ -242,11 +366,12 @@ export default function AddStockModal({
           skuid,
           type: 'vacpac',
           category: formCategory,
+          categoryId: selectedCategory?.id || formCategory,
           locationId: selectedLocation.id,
           locationSku: selectedLocation.skuCode,
           packNumber,
-          schoolId: selectedSchool.id,
-          schoolSku: selectedSchool.skuCode,
+          schoolId: selectedSchool?.id || 'N/A',
+          schoolSku: selectedSchool?.skuCode || 'N/A',
           colourId: selectedColour.id,
           colourSku: selectedColour.skuCode,
           typeId: selectedType.id,
@@ -315,59 +440,71 @@ export default function AddStockModal({
               )}
 
               {/* Dynamic Step 1: Category */}
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  1. Uniform Category
-                </label>
-                <select
-                  value={formCategory}
-                  onChange={(e) => setFormCategory(e.target.value as 'Plain' | 'Logo')}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white transition"
-                >
-                  {(!selectedType || selectedType.plain !== false) && (
-                    <option value="Plain">Plain (No custom school logo)</option>
-                  )}
-                  {(!selectedType || selectedType.logo !== false) && (
-                    <option value="Logo">Logo (Custom embroidered school logo)</option>
-                  )}
-                </select>
-              </div>
-
-              {/* Dynamic Step 2: Storage Format */}
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  2. Packaging Format
-                </label>
-                <div className="grid grid-cols-2 gap-3 bg-slate-100 p-1.5 rounded-2xl">
-                  <button
-                    type="button"
-                    onClick={() => setFormType('single')}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all ${
-                      formType === 'single'
-                        ? 'bg-white text-primary shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Single (Loose Items)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormType('vacpac')}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all ${
-                      formType === 'vacpac'
-                        ? 'bg-white text-primary shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    VacPac (Bulk Bundle)
-                  </button>
+              {defaultCategory || categoryOptions.length === 1 ? (
+                <div>
+                  <div className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 flex items-center justify-between">
+                    <span>{formCategory || defaultCategory || categoryOptions[0]}</span>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                    Uniform Category
+                  </label>
+                  <select
+                    value={formCategory}
+                    onChange={(e) => setFormCategory(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white transition"
+                  >
+                    {categoryOptions.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {showPackagingQuestion && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                    Packaging Format
+                  </label>
+                  <div className="grid grid-cols-2 gap-3 bg-slate-100 p-1.5 rounded-2xl">
+                    {availableModes.includes('single') && (
+                      <button
+                        type="button"
+                        onClick={() => setFormType('single')}
+                        className={`py-2 px-3 rounded-xl text-xs font-bold transition-all ${
+                          formType === 'single'
+                            ? 'bg-white text-primary shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Single (Loose Items)
+                      </button>
+                    )}
+                    {availableModes.includes('vacpac') && (
+                      <button
+                        type="button"
+                        onClick={() => setFormType('vacpac')}
+                        className={`py-2 px-3 rounded-xl text-xs font-bold transition-all ${
+                          formType === 'vacpac'
+                            ? 'bg-white text-primary shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        VacPac (Bulk Bundle)
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Step 3: Specifics depending on Single vs VacPac */}
               <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-4">
                 <span className="block text-xs font-extrabold text-secondary tracking-wider uppercase">
-                  3. Location & Stock Value
+                  Location & Stock Value
                 </span>
 
                 <div>
@@ -381,7 +518,7 @@ export default function AddStockModal({
                     required
                   >
                     {locations
-                      .filter(l => l.ruleProfile === (formType === 'single' ? 'Pickers Shelf' : 'VacPac Storage Area'))
+                      .filter(l => !l.ruleProfile || l.ruleProfile === (formType === 'single' ? 'Pickers Shelf' : 'VacPac Storage Area'))
                       .map(l => (
                         <option key={l.id} value={l.id}>
                           {l.name}
@@ -455,95 +592,170 @@ export default function AddStockModal({
               </div>
 
               {/* Step 4: Common traits */}
-              <div className="space-y-3.5 pt-1">
-                <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  4. Clothing Item Traits
-                </span>
+              {showSchoolQuestion && (
+                <div className="space-y-3.5 pt-1">
+                  <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    Clothing Item Traits
+                  </span>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="col-span-2">
-                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                      School Translation
-                    </label>
-                    <select
-                      value={selectedSchoolId}
-                      onChange={(e) => setSelectedSchoolId(e.target.value)}
-                      className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-primary focus:bg-white transition"
-                      required
-                    >
-                      {schools.map(s => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        School Translation
+                      </label>
+                      <select
+                        value={selectedSchoolId}
+                        onChange={(e) => setSelectedSchoolId(e.target.value)}
+                        className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-primary focus:bg-white transition"
+                        required
+                      >
+                        {schools.map(s => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                      Garment Type
-                    </label>
-                    <select
-                      value={selectedTypeId}
-                      onChange={(e) => setSelectedTypeId(e.target.value)}
-                      className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-primary focus:bg-white transition"
-                      required
-                    >
-                      {clothingTypes.map(t => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Garment Type
+                      </label>
+                      <select
+                        value={selectedTypeId}
+                        onChange={(e) => setSelectedTypeId(e.target.value)}
+                        className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-primary focus:bg-white transition"
+                        required
+                      >
+                        {clothingTypes.map(t => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                      Colour
-                    </label>
-                    <select
-                      value={selectedColourId}
-                      onChange={(e) => setSelectedColourId(e.target.value)}
-                      className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-primary focus:bg-white transition"
-                      required
-                    >
-                      {colours.map(c => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Colour
+                      </label>
+                      <select
+                        value={selectedColourId}
+                        onChange={(e) => setSelectedColourId(e.target.value)}
+                        className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-primary focus:bg-white transition"
+                        required
+                      >
+                        {colours.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                  <div className="col-span-2">
-                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                      Size Option
-                    </label>
-                    <select
-                      value={selectedSizeId}
-                      onChange={(e) => setSelectedSizeId(e.target.value)}
-                      className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-primary focus:bg-white transition"
-                      required
-                    >
-                      {filteredSizes.map(s => (
-                        <option key={s.id} value={s.id}>
-                          {s.label} {(s.category && s.category !== 'Clothes') ? `(${s.category})` : ''}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="col-span-2">
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Size Option
+                      </label>
+                      <select
+                        value={selectedSizeId}
+                        onChange={(e) => setSelectedSizeId(e.target.value)}
+                        className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-primary focus:bg-white transition"
+                        required
+                      >
+                        {filteredSizes.map(s => (
+                          <option key={s.id} value={s.id}>
+                            {s.label} {(s.category && s.category !== 'Clothes') ? `(${s.category})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
+
+              {!showSchoolQuestion && (
+                <div className="space-y-3.5 pt-1">
+                  <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    Clothing Item Traits
+                  </span>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Garment Type
+                      </label>
+                      <select
+                        value={selectedTypeId}
+                        onChange={(e) => setSelectedTypeId(e.target.value)}
+                        className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-primary focus:bg-white transition"
+                        required
+                      >
+                        {clothingTypes.map(t => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Colour
+                      </label>
+                      <select
+                        value={selectedColourId}
+                        onChange={(e) => setSelectedColourId(e.target.value)}
+                        className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-primary focus:bg-white transition"
+                        required
+                      >
+                        {colours.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="col-span-2">
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Size Option
+                      </label>
+                      <select
+                        value={selectedSizeId}
+                        onChange={(e) => setSelectedSizeId(e.target.value)}
+                        className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-primary focus:bg-white transition"
+                        required
+                      >
+                        {filteredSizes.map(s => (
+                          <option key={s.id} value={s.id}>
+                            {s.label} {(s.category && s.category !== 'Clothes') ? `(${s.category})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 bg-primary hover:bg-primary-hover disabled:bg-slate-300 text-white font-bold rounded-2xl text-xs sm:text-sm tracking-wide transition-all shadow-md flex items-center justify-center gap-2"
-              >
-                <Plus className="w-4 h-4 stroke-[2.5]" />
-                {loading ? 'Registering...' : 'Save and Register Stock Unit'}
-              </button>
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 py-3 border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-2xl text-xs sm:text-sm tracking-wide transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 py-3 bg-[#00A896] hover:bg-[#008f80] disabled:bg-slate-300 text-white font-bold rounded-2xl text-xs sm:text-sm tracking-wide transition-all shadow-md flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                  {loading ? 'Registering...' : 'Save'}
+                </button>
+              </div>
             </form>
           </motion.div>
         </div>

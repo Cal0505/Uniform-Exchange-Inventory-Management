@@ -30,13 +30,18 @@ export interface Location {
   id: string;
   name: string;
   skuCode: string;
-  ruleProfile: 'Pickers Shelf' | 'VacPac Storage Area';
+  ruleProfile?: 'Pickers Shelf' | 'VacPac Storage Area';
 }
 
 export interface Category {
   id: string;
   name: string;
   skuCode: string;
+  hasSchool?: boolean;
+  hasSchools?: boolean;
+  hasSingles?: boolean;
+  hasBulk?: boolean;
+  bulkType?: 'mixed' | 'single-garment';
 }
 
 export interface ItemType {
