@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Menu, X, ChevronDown, ChevronRight, Package, Wrench, Users, 
   Terminal, BarChart3, User, UserCircle, Shirt, Maximize2, Layers, Clock, 
-  School, Palette, MapPin, LogOut, Settings
+  School, Palette, MapPin, LogOut, Settings, ClipboardList
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -52,6 +52,7 @@ export default function NavBar({
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [homeExpanded, setHomeExpanded] = useState(false);
   const [inventoryExpanded, setInventoryExpanded] = useState(false);
+  const [pickersExpanded, setPickersExpanded] = useState(false);
   const [managementExpanded, setManagementExpanded] = useState(false);
   const [adminExpanded, setAdminExpanded] = useState(false);
 
@@ -105,6 +106,37 @@ export default function NavBar({
               <button onClick={() => handleSelectStaticPage('training')} className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === 'training' ? 'bg-amber-400 text-slate-900' : 'text-white hover:bg-white/10'}`}>
                 <Terminal className="w-3.5 h-3.5 text-white/60" /><span>Training</span>
               </button>
+            </div>
+          )}
+        </div>
+
+        {/* Pickers Drawer */}
+        <div className="space-y-1">
+          <button onClick={() => setPickersExpanded(!pickersExpanded)} className={`w-full py-2.5 px-3 flex items-center justify-between rounded-full border transition cursor-pointer duration-200 ${activeMainTab === 'pickers' ? 'bg-white/15 text-white border-white/10 shadow-xs font-black' : 'bg-white/5 text-white/70 border-transparent hover:bg-white/10 hover:text-white'}`}>
+            <div className="flex items-center gap-2"><ClipboardList className={`w-4 h-4 ${activeMainTab === 'pickers' ? 'text-amber-400' : 'text-white/80'}`} /><span className="uppercase text-[10px] tracking-widest font-extrabold">Pickers</span></div>
+            {pickersExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+          </button>
+          {pickersExpanded && (
+            <div className="pl-4 border-l border-white/10 ml-5 space-y-1 pt-1 animate-fadeIn">
+              {[
+                { id: 'pickers_ready', label: 'Ready to Pick' },
+                { id: 'pickers_waiting', label: 'Waiting on Stock' },
+                { id: 'pickers_picked', label: 'Picked Orders' },
+              ].map((subTab) => (
+                <button
+                  key={subTab.id}
+                  onClick={() => {
+                    setActiveMainTab('pickers');
+                    setActiveSubTab(subTab.id);
+                    setCurrentViewedCategory(null);
+                    setProfileDropdownOpen(false);
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === 'pickers' && activeSubTab === subTab.id ? 'bg-amber-400 text-slate-900 shadow-sm' : 'text-white hover:bg-white/10'}`}
+                >
+                  <span className="truncate">{subTab.label}</span>
+                </button>
+              ))}
             </div>
           )}
         </div>

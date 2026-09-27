@@ -16,7 +16,8 @@ import NavBar from './components/NavBar';
 import HomeLanding from './components/HomeLanding';
 import AdminTabContainer from './AdminTabContainer'; 
 import StatsDashboard from './components/StatsDashboard';
-import Training from './components/Training'; // <-- New Import!
+import Training from './components/Training';
+import Pickers from './components/Pickers';
 import { useFirestoreData } from './useFirestoreData'; 
 
 interface AdvancedSchool {
@@ -164,6 +165,7 @@ function MainApp() {
         {effectiveMainTab === null && <HomeLanding categories={dataPool.categories || []} schools={mappedSchools} inventory={dataPool.inventory || []} userRole={userRole} loggedInEmail={user.email || ''} newsFeed={newsFeed} tasksList={tasksList} users={dataPool.users || []} />}
         {/* Render the new Training component here! */}
         {effectiveMainTab === 'training' && <Training userRole={userRole} loggedInEmail={user.email || ''} users={dataPool.users || []} />}
+        {effectiveMainTab === 'pickers' && <Pickers activePickerTab={activeSubTab === 'pickers_waiting' ? 'waiting' : activeSubTab === 'pickers_picked' ? 'picked' : 'ready'} currentUserName={userName || 'Current Picker'} />}
         {effectiveMainTab === 'inventory_view' && <Inventory currentViewedCategory={currentViewedCategory} categories={dataPool.categories || []} schools={mappedSchools} clothingTypes={mapAttribute(dataPool.clothingTypes)} sizes={mapAttribute(dataPool.sizes)} colours={mapAttribute(dataPool.colours)} locations={mapAttribute(dataPool.locations)} inventory={dataPool.inventory || []} />}
         {effectiveMainTab === 'management_view' && <Management schools={mappedSchools} clothingTypes={mapAttribute(dataPool.clothingTypes)} sizes={mapAttribute(dataPool.sizes)} colours={mapAttribute(dataPool.colours)} locations={mapAttribute(dataPool.locations)} categories={dataPool.categories || []} schoolTypes={dataPool.schoolTypes || []} userRole={userRole} activeTab={activeSubTab} setActiveTab={setActiveSubTab} />}
         {effectiveMainTab === 'staff' && <AdminTabContainer schools={mappedSchools as any} clothingTypes={mapAttribute(dataPool.clothingTypes) as any} sizes={mapAttribute(dataPool.sizes) as any} colours={mapAttribute(dataPool.colours) as any} locations={mapAttribute(dataPool.locations) as any} categories={dataPool.categories || []} itemTypes={[]} schoolTypes={dataPool.schoolTypes || []} userRole={userRole} forcedSubTabOverride="staff" />}
