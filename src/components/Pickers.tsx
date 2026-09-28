@@ -471,20 +471,28 @@ export default function Pickers({ activePickerTab: controlledTab, currentUserNam
                       </div>
                     </div>
 
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleItemStatusChange(selectedOrder.id, index, 'picked')}
-                        className={`px-2.5 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-[0.12em] ${item.itemStatus === 'picked' ? 'bg-emerald-500 text-white border-emerald-500' : 'border-teal-200 bg-white text-teal-700'}`}
-                      >
-                        Picked
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleItemStatusChange(selectedOrder.id, index, 'not-picked')}
-                        className={`px-2.5 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-[0.12em] ${item.itemStatus === 'not-picked' ? 'bg-rose-500 text-white border-rose-500' : 'border-slate-200 bg-white text-slate-600'}`}
-                      >
-                        Not picked
+<div className="mt-3 grid grid-cols-2 gap-2 w-full">
+  <button
+    type="button"
+    onClick={() => handleItemStatusChange(selectedOrder.id, index, 'picked')}
+    className={`w-full px-2.5 py-2.5 rounded-xl border text-[9px] font-black uppercase tracking-[0.12em] text-center ${
+      item.itemStatus === 'picked' 
+        ? 'bg-emerald-500 text-white border-emerald-500' 
+        : 'border-teal-200 bg-white text-teal-700'
+    }`}
+  >
+    Picked
+  </button>
+  <button
+    type="button"
+    onClick={() => handleItemStatusChange(selectedOrder.id, index, 'not-picked')}
+    className={`w-full px-2.5 py-2.5 rounded-xl border text-[9px] font-black uppercase tracking-[0.12em] text-center ${
+      item.itemStatus === 'not-picked' 
+        ? 'bg-rose-500 text-white border-rose-500' 
+        : 'border-slate-200 bg-white text-slate-600'
+    }`}
+  >
+    Not picked
                       </button>
                     </div>
                   </div>
