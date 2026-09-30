@@ -141,6 +141,9 @@ export default function NavBar({
           )}
         </div>
 
+        {/* Delivery */}
+
+
         {/* Inventory Drawer */}
         <div className="space-y-1">
           <button onClick={() => setInventoryExpanded(!inventoryExpanded)} className={`w-full py-2.5 px-3 flex items-center justify-between rounded-full border transition cursor-pointer duration-200 ${inventoryExpanded ? 'bg-white/15 text-white border-white/10 shadow-xs font-black' : 'bg-white/5 text-white/70 border-transparent hover:bg-white/10 hover:text-white'}`}>
