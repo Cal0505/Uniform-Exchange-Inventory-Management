@@ -541,14 +541,13 @@ export default function Pickers({ activePickerTab: controlledTab, currentUserId,
                 <div className="space-y-3 p-4">
                   {orderChildren.map(({ childName, school, age, items }, groupIndex) => (
                     <div key={`${order.id}-${childName}`} className="rounded-2xl border border-orange-100 bg-orange-50/40 p-3">
-                      <div className="flex items-center justify-between gap-2 border-b border-orange-100 pb-2">
+                      <div className="border-b border-orange-100 pb-2">
                         <div>
                           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-orange-500">Child {String.fromCharCode(65 + groupIndex)}</p>
-                          <h4 className="text-sm font-black text-slate-900">{childName}</h4>
-                        </div>
-                        <div className="text-right text-[10px] font-bold text-slate-600">
-                          <div>Age {age || 'N/A'}</div>
-                          <div>{school || 'School not specified'}</div>
+                          <div className="mt-1 space-y-0.5 text-xs font-bold text-slate-700">
+                            <p><span className="font-black text-slate-500">Age:</span> {age || 'N/A'}</p>
+                            <p><span className="font-black text-slate-500">School:</span> {school || 'School not specified'}</p>
+                          </div>
                         </div>
                       </div>
 
