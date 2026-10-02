@@ -2,17 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { Search, Trash2, User, Settings, Filter, Plus, X, Edit2 } from 'lucide-react';
+import { getEffectivePermissions, getLegacyPermissions } from '../rbac';
+import { expandNavigationPermissions, flattenNavigationTree, getNavigationTree, hasNavigationPermission, type NavigationCategory, type NavigationItem } from '../navigation';
 
 interface Slide { text: string; imageUrl: string; }
-interface UserManagementProps { userRole: string; }
+interface UserManagementProps { userRole: string; categories: NavigationCategory[]; }
 
-export default function UserManagement({ userRole }: UserManagementProps) {
+export default function UserManagement({ userRole, categories }: UserManagementProps) {
   const [usersList, setUsersList] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [newRoleName, setNewRoleName] = useState('');
+  const [newRoleWeight, setNewRoleWeight] = useState('0');
+  const [newRolePermissions, setNewRolePermissions] = useState<string[]>([]);
+  const [roleDraft, setRoleDraft] = useState<{ id: string; name: string; weight: string; permissions: string[] } | null>(null);
 
   const [trainingModules, setTrainingModules] = useState<any[]>([]);
   const [activeSection, setActiveSection] = useState<'directory' | 'roles' | 'training' | 'create_task' | 'publish_news'>('directory');
@@ -83,16 +88,155 @@ export default function UserManagement({ userRole }: UserManagementProps) {
     return () => { unsubUsers(); unsubRoles(); unsubTraining(); };
   }, []);
 
+  const currentUserRoleObj = roles.find(r => r.name.toLowerCase() === userRole?.toLowerCase());
+  const currentUserWeight = currentUserRoleObj ? Number(currentUserRoleObj.weight || 0) : 0;
+  const isHeadDev = userRole === 'Head_Dev';
+  const currentUserPermissions = getEffectivePermissions(roles, userRole);
+  const navigationTree = getNavigationTree(categories);
+  const canEditRole = (role: any) => isHeadDev || currentUserWeight > Number(role.weight || 0);
+
   const handleApprove = async (userId: string) => {
     await updateDoc(doc(db, 'users', userId), { status: 'Active' });
   };
 
   const handleAddRole = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newRoleName.trim()) return;
-    await addDoc(collection(db, 'roles'), { name: newRoleName.trim(), weight: 0 });
+    const name = newRoleName.trim();
+    const weight = Number(newRoleWeight);
+    if (!name || !Number.isInteger(weight) || weight < 0) {
+      showNotification('error', 'Enter a role name and a non-negative clearance level.');
+      return;
+    }
+    if (roles.some(role => role.name.toLowerCase() === name.toLowerCase())) {
+      showNotification('error', 'A role with that name already exists.');
+      return;
+    }
+    if (!isHeadDev && weight > currentUserWeight) {
+      showNotification('error', 'You cannot assign a clearance level higher than your own.');
+      return;
+    }
+    if (!newRolePermissions.every(permission => hasNavigationPermission(navigationTree, currentUserPermissions, permission))) {
+      showNotification('error', 'You cannot grant permissions you do not hold.');
+      return;
+    }
+    await addDoc(collection(db, 'roles'), {
+      name,
+      weight,
+      permissions: newRolePermissions,
+      permissionsVersion: 2,
+      createdAt: serverTimestamp(),
+    });
     setNewRoleName('');
+    setNewRoleWeight('0');
+    setNewRolePermissions([]);
+    showNotification('success', 'Role created.');
   };
+
+  const handleOpenRoleEdit = (role: any) => {
+    if (!canEditRole(role)) return;
+    setRoleDraft({
+      id: role.id,
+      name: role.name || '',
+      weight: String(role.weight ?? 0),
+      permissions: expandNavigationPermissions(
+        navigationTree,
+        Array.isArray(role.permissions) ? role.permissions : getLegacyPermissions(Number(role.weight || 0)),
+      ),
+    });
+    document.getElementById(`role-row-${role.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const handleSaveRole = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!roleDraft) return;
+    const name = roleDraft.name.trim();
+    const weight = Number(roleDraft.weight);
+    const originalRole = roles.find(role => role.id === roleDraft.id);
+    if (!originalRole) return;
+    if (!name || !Number.isInteger(weight) || weight < 0) {
+      showNotification('error', 'Enter a role name and a non-negative clearance level.');
+      return;
+    }
+    if (roles.some(role => role.id !== roleDraft.id && role.name.toLowerCase() === name.toLowerCase())) {
+      showNotification('error', 'A role with that name already exists.');
+      return;
+    }
+    if (!canEditRole(originalRole) || (!isHeadDev && weight > currentUserWeight)) {
+      showNotification('error', 'You cannot edit a role at or above your clearance level.');
+      return;
+    }
+    if (!roleDraft.permissions.every(permission => hasNavigationPermission(navigationTree, currentUserPermissions, permission))) {
+      showNotification('error', 'You cannot grant permissions you do not hold.');
+      return;
+    }
+
+    if (originalRole.name !== name) {
+      const assignedUsers = usersList.filter(user => user.role?.toLowerCase() === originalRole.name.toLowerCase());
+      await Promise.all(assignedUsers.map(user => updateDoc(doc(db, 'users', user.id), { role: name })));
+    }
+    await updateDoc(doc(db, 'roles', roleDraft.id), {
+      name,
+      weight,
+      permissions: roleDraft.permissions,
+      permissionsVersion: 2,
+      updatedAt: serverTimestamp(),
+    });
+    setRoleDraft(null);
+    showNotification('success', 'Role updated.');
+  };
+
+  const handleDeleteRole = async (role: any) => {
+    if (!canEditRole(role)) return;
+    if (usersList.some(user => user.role?.toLowerCase() === role.name.toLowerCase())) {
+      showNotification('error', 'Reassign all users from this role before deleting it.');
+      return;
+    }
+    if (!window.confirm(`Delete the ${role.name} role?`)) return;
+    await deleteDoc(doc(db, 'roles', role.id));
+    if (roleDraft?.id === role.id) setRoleDraft(null);
+    showNotification('success', 'Role deleted.');
+  };
+
+  const renderPermissionOptions = (
+    items: NavigationItem[],
+    permissions: string[],
+    setPermissions: (next: string[]) => void,
+    ancestors: string[] = [],
+  ): React.ReactNode => (
+    <div className="space-y-2">
+      {items.map((item) => {
+        const Icon = item.icon;
+        const branchIds = flattenNavigationTree([item]).map(({ id }) => id);
+        const canGrantPermission = hasNavigationPermission(navigationTree, currentUserPermissions, item.id);
+        return (
+          <div key={item.id}>
+            <label className={`flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 ${canGrantPermission ? '' : 'opacity-50'}`}>
+              <input
+                type="checkbox"
+                checked={permissions.includes(item.id)}
+                disabled={!canGrantPermission}
+                onChange={() => {
+                  if (permissions.includes(item.id)) {
+                    setPermissions(permissions.filter(permission => !branchIds.includes(permission)));
+                    return;
+                  }
+                  setPermissions(Array.from(new Set([...permissions, ...ancestors, item.id])));
+                }}
+                className="h-4 w-4 accent-teal-700"
+              />
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              {item.label}
+            </label>
+            {item.children && (
+              <div className="ml-3 mt-2 border-l border-slate-200 pl-3">
+                {renderPermissionOptions(item.children, permissions, setPermissions, [...ancestors, item.id])}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 
   const handleAddTrainingModule = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -241,8 +385,6 @@ export default function UserManagement({ userRole }: UserManagementProps) {
     setEditingUser(null);
   };
 
-  const currentUserRoleObj = roles.find(r => r.name.toLowerCase() === userRole?.toLowerCase());
-  const currentUserWeight = currentUserRoleObj ? Number(currentUserRoleObj.weight || 0) : 0;
   const sortedRoles = [...roles].sort((a, b) => Number(b.weight || 0) - Number(a.weight || 0));
 
   const filteredUsers = usersList.filter(user => {
@@ -368,33 +510,85 @@ export default function UserManagement({ userRole }: UserManagementProps) {
       )}
 
       {activeSection === 'roles' && (
-        <div className="w-full lg:w-80 shrink-0 mt-4">
-          <div className="bg-teal-50 border border-teal-200 rounded-xl p-5 shadow-sm">
-            <h4 className="font-bold uppercase mb-1 flex items-center gap-2 text-teal-800 text-sm"><Settings size={16}/> Role Manager</h4>
-            <div className="space-y-1 mb-4 max-h-60 overflow-y-auto pr-1">
-              {sortedRoles.map(r => {
-                const canEditRole = userRole === 'Head_Dev' || currentUserWeight > Number(r.weight || 0);
-                return (
-                  <div key={r.id} className="flex justify-between items-center py-2 border-b last:border-0">
-                    <span className="text-sm font-bold text-teal-700">{r.name}</span>
-                    <input type="number" defaultValue={r.weight} disabled={!canEditRole} className={`w-12 border rounded p-1 text-center text-sm ${canEditRole ? 'bg-white border-teal-200' : 'bg-slate-50 border-slate-200'}`}
-                      onBlur={(e) => {
-                        const newWeight = Number(e.target.value);
-                        if (userRole === 'Head_Dev' || newWeight <= currentUserWeight) {
-                          updateDoc(doc(db, 'roles', r.id), { weight: newWeight });
-                        } else {
-                          e.target.value = String(r.weight);
-                          alert("Security: Cannot assign weight > your own.");
-                        }
-                      }}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-            <form onSubmit={handleAddRole} className="flex gap-2 pt-4 border-t border-teal-100">
-              <input type="text" placeholder="New Role..." value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} className="flex-1 p-2 border border-teal-200 rounded-lg text-sm" />
-              <button type="submit" className="bg-orange-500 text-white p-2 rounded-lg cursor-pointer hover:bg-orange-600"><Plus size={18} /></button>
+        <div className="mt-4 space-y-4">
+          <div>
+            <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-teal-800"><Settings size={16} /> Role Manager</h3>
+            <p className="mt-1 text-xs text-slate-600">Higher clearance levels inherit permissions from lower levels. Selected permissions are granted directly to the role.</p>
+          </div>
+
+          <div className="flex flex-col gap-4">
+            <section className="order-2 overflow-hidden rounded-xl border border-teal-200 bg-white shadow-sm">
+              <div className="grid grid-cols-[minmax(0,1fr)_90px_110px_104px] gap-2 border-b border-teal-100 bg-teal-50 px-4 py-3 text-[9px] font-black uppercase tracking-wider text-teal-800">
+                <span>Role</span><span>Rank</span><span>Direct Access</span><span className="text-right">Actions</span>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {sortedRoles.map(role => {
+                  const canEdit = canEditRole(role);
+                  const assignedCount = usersList.filter(user => user.role?.toLowerCase() === role.name.toLowerCase()).length;
+                  const permissionCount = Array.isArray(role.permissions) ? role.permissions.length : 'Legacy';
+                  return (
+                    <div key={role.id} id={`role-row-${role.id}`} className="px-4 py-3 text-xs">
+                      <div className="grid grid-cols-[minmax(0,1fr)_90px_110px_104px] items-center gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate font-bold text-slate-800">{role.name}</p>
+                          <p className="mt-0.5 text-[10px] text-slate-500">{assignedCount} assigned</p>
+                        </div>
+                        <span className="font-mono font-bold text-slate-700">{Number(role.weight || 0)}</span>
+                        <span className="text-slate-600">{permissionCount}{typeof permissionCount === 'number' ? ' features' : ''}</span>
+                        <div className="flex justify-end gap-1">
+                          <button type="button" onClick={() => handleOpenRoleEdit(role)} disabled={!canEdit} aria-label={`Edit ${role.name}`} title={canEdit ? 'Edit role' : 'Insufficient clearance'} className="rounded-md p-2 text-slate-500 hover:bg-teal-50 hover:text-teal-800 disabled:cursor-not-allowed disabled:opacity-40"><Edit2 size={14} /></button>
+                          <button type="button" onClick={() => handleDeleteRole(role)} disabled={!canEdit || assignedCount > 0} aria-label={`Delete ${role.name}`} title={assignedCount ? 'Reassign users before deleting' : canEdit ? 'Delete role' : 'Insufficient clearance'} className="rounded-md p-2 text-slate-500 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"><Trash2 size={14} /></button>
+                        </div>
+                      </div>
+                      {roleDraft?.id === role.id && (
+                        <form onSubmit={handleSaveRole} className="mt-4 space-y-4 rounded-lg border border-teal-200 bg-teal-50/70 p-4">
+                          <h4 className="font-black text-slate-900">Edit {role.name}</h4>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <label className="block font-bold text-slate-700">
+                              Role name
+                              <input required value={roleDraft.name} onChange={(e) => setRoleDraft({ ...roleDraft, name: e.target.value })} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white p-2.5 text-sm font-medium" />
+                            </label>
+                            <label className="block font-bold text-slate-700">
+                              Rank
+                              <input required type="number" min="0" step="1" value={roleDraft.weight} onChange={(e) => setRoleDraft({ ...roleDraft, weight: e.target.value })} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white p-2.5 text-sm font-medium" />
+                            </label>
+                          </div>
+                          <fieldset>
+                            <legend className="mb-2 font-bold text-slate-700">Application permissions</legend>
+                            {renderPermissionOptions(navigationTree, roleDraft.permissions, (permissions) => setRoleDraft({ ...roleDraft, permissions }))}
+                          </fieldset>
+                          <div className="flex justify-end gap-2 border-t border-teal-200 pt-3">
+                            <button type="button" onClick={() => setRoleDraft(null)} className="rounded-lg bg-white px-4 py-2.5 font-bold text-slate-700">Cancel</button>
+                            <button type="submit" className="rounded-lg bg-teal-700 px-4 py-2.5 font-black uppercase tracking-wider text-white hover:bg-teal-800">Save</button>
+                          </div>
+                        </form>
+                      )}
+                    </div>
+                  );
+                })}
+                {sortedRoles.length === 0 && <p className="p-5 text-sm text-slate-500">No roles have been created.</p>}
+              </div>
+            </section>
+
+            <form onSubmit={handleAddRole} className="order-1 space-y-4 rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+              <h4 className="text-sm font-black text-slate-900">Create Role</h4>
+              <label className="block text-xs font-bold text-slate-700">
+                Role name
+                <input required value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white p-2.5 text-sm font-medium" placeholder="e.g. Inventory Lead" />
+              </label>
+              {Boolean(newRoleName.trim()) && <>
+              <label className="block text-xs font-bold text-slate-700">
+                Clearance rank
+                <input required type="number" min="0" step="1" value={newRoleWeight} onChange={(e) => setNewRoleWeight(e.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white p-2.5 text-sm font-medium" />
+              </label>
+              <fieldset>
+                <legend className="mb-2 text-xs font-bold text-slate-700">Application permissions</legend>
+                {renderPermissionOptions(navigationTree, newRolePermissions, setNewRolePermissions)}
+              </fieldset>
+              <div className="flex gap-2 border-t border-amber-200 pt-3">
+                <button type="submit" className="flex-1 rounded-lg bg-orange-500 px-3 py-2.5 text-xs font-black uppercase tracking-wider text-white hover:bg-orange-600">Create Role</button>
+              </div>
+              </>}
             </form>
           </div>
         </div>

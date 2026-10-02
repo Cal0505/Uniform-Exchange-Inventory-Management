@@ -5,6 +5,7 @@ import React, { useState, useMemo } from 'react';
 import { Trash2, Search, PlusCircle, Edit3, XCircle, Check, ArrowUp, ArrowDown } from 'lucide-react';
 import { db } from '../firebase'; 
 import { collection, query, where, getDocs, doc, writeBatch } from 'firebase/firestore';
+import { getNavigationTree, type NavigationItem } from '../navigation';
 
 interface ManagementDashboardProps {
   categories: any[];
@@ -18,6 +19,7 @@ interface ManagementDashboardProps {
   setActiveTab: (tab: string) => void;
   userRole?: string;
   forcedSubTabOverride?: any;
+  navigationItems?: NavigationItem[];
 }
 
 export default function ManagementDashboard({
@@ -31,7 +33,8 @@ export default function ManagementDashboard({
   activeTab,
   setActiveTab,
   userRole,
-  forcedSubTabOverride
+  forcedSubTabOverride,
+  navigationItems = getNavigationTree().find((item) => item.id === 'management')?.children || [],
 }: ManagementDashboardProps) {
   // Form Submission States (activeTab is now managed via props)
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -648,7 +651,7 @@ export default function ManagementDashboard({
       
       {/* Tab Navigation Ribbon */}
       <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-4 mb-6">
-        {['categories', 'schoolTypes', 'schools', 'clothingTypes', 'sizes', 'colours', 'locations'].map((tab) => (
+        {navigationItems.map(({ id: tab, label }) => (
           <button
             key={tab}
             onClick={() => {
@@ -659,7 +662,7 @@ export default function ManagementDashboard({
               activeTab === tab ? 'bg-[#00A896] text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
             }`}
           >
-            {tab === 'schools' ? 'School Registry' : tab.replace(/([A-Z])/g, ' $1')}
+            {label}
           </button>
         ))}
       </div>

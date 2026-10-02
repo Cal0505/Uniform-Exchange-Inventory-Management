@@ -1,22 +1,9 @@
-import React, { useState } from 'react';
-import { 
-  Menu, X, ChevronDown, ChevronRight, Package, Wrench, Users, 
-  Terminal, BarChart3, User, UserCircle, Shirt, Maximize2, Layers, Clock, 
-  School, Palette, MapPin, LogOut, Settings, ClipboardList
-} from 'lucide-react';
-
-const NAV_ITEMS = [
-  { id: 'categories', label: 'Categories', icon: Layers },
-  { id: 'schoolTypes', label: 'School Types', icon: Clock },
-  { id: 'schools', label: 'School Registry', icon: School },
-  { id: 'clothingTypes', label: 'Clothing Types', icon: Shirt },
-  { id: 'sizes', label: 'Sizes', icon: Maximize2 },
-  { id: 'colours', label: 'Colours', icon: Palette },
-  { id: 'locations', label: 'Locations', icon: MapPin },
-];
+import React, { useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight, LogOut, Menu, X } from 'lucide-react';
+import { filterNavTreeByPermissions, type NavigationItem } from '../navigation';
 
 interface NavBarProps {
-  categories: any[];
+  navigationTree: NavigationItem[];
   activeMainTab: string | null;
   setActiveMainTab: (tab: any) => void;
   activeSubTab: string;
@@ -25,15 +12,13 @@ interface NavBarProps {
   setCurrentViewedCategory: (catId: string | null) => void;
   userRole: string;
   userName: string;
-  loggedInEmail: string;
-  currentUserWeight: number;
+  rolePermissions: string[];
   handleSignOut: () => void;
   isFirebaseConnected: boolean;
   loading: boolean;
 }
 
 export default function NavBar({
-  categories,
   activeMainTab,
   setActiveMainTab,
   activeSubTab,
@@ -42,182 +27,92 @@ export default function NavBar({
   setCurrentViewedCategory,
   userRole,
   userName,
-  loggedInEmail,
-  currentUserWeight,
+  navigationTree,
+  rolePermissions,
   handleSignOut,
   isFirebaseConnected,
   loading
 }: NavBarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
-  const [homeExpanded, setHomeExpanded] = useState(false);
-  const [inventoryExpanded, setInventoryExpanded] = useState(false);
-  const [pickersExpanded, setPickersExpanded] = useState(false);
-  const [managementExpanded, setManagementExpanded] = useState(false);
-  const [adminExpanded, setAdminExpanded] = useState(false);
-
-  const sortedCategories = [...categories].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-  const isHeadDev = userRole === 'Head_Dev';
-  const canSeeManagement = isHeadDev || currentUserWeight >= 5;
-  const canSeeAdmin = isHeadDev || currentUserWeight >= 5;
-  const canSeeStatistics = isHeadDev || currentUserWeight >= 5;
-  const canSeeDevTools = isHeadDev || currentUserWeight >= 10;
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  const filteredNavigationTree = useMemo(
+    () => filterNavTreeByPermissions(navigationTree, rolePermissions),
+    [navigationTree, rolePermissions],
+  );
   
-  const handleSelectCategoryPage = (catId: string) => {
-    setActiveMainTab('inventory_view');
-    setCurrentViewedCategory(catId);
-    setProfileDropdownOpen(false);
-    setMobileMenuOpen(false); 
-  };
-
-  const handleSelectManagementPage = (subTabId: string) => {
-    setActiveMainTab('management_view');
-    setActiveSubTab(subTabId);
-    setCurrentViewedCategory(null);
-    setProfileDropdownOpen(false);
-    setMobileMenuOpen(false);
-  };
-
-  const handleSelectStaticPage = (mainTabId: string) => {
+  const handleSelectStaticPage = (mainTabId: string | null) => {
     setActiveMainTab(mainTabId);
     setCurrentViewedCategory(null);
     setProfileDropdownOpen(false);
     setMobileMenuOpen(false);
   };
 
+  const isNavigationItemActive = (item: NavigationItem): boolean => {
+    if (item.target
+      && item.target.mainTab === activeMainTab
+      && (item.target.subTab === undefined || item.target.subTab === activeSubTab)
+      && (item.target.categoryId === undefined || item.target.categoryId === currentViewedCategory)) return true;
+    return (item.children || []).some(isNavigationItemActive);
+  };
+
+  const renderNavigationItems = (items: NavigationItem[], depth = 0): React.ReactNode => (
+    <div className={depth === 0 ? 'space-y-2' : 'ml-5 space-y-1 border-l border-white/10 pl-4 pt-1'}>
+      {items.map((item) => {
+        const Icon = item.icon;
+        const isActive = isNavigationItemActive(item);
+        const isExpanded = !!expandedItems[item.id];
+        if (item.children) {
+          return (
+            <div key={item.id} className="space-y-1">
+              <button
+                type="button"
+                aria-expanded={isExpanded}
+                onClick={() => setExpandedItems((current) => ({ ...current, [item.id]: !current[item.id] }))}
+                className={`w-full rounded-full border px-3 py-2.5 flex items-center justify-between transition cursor-pointer duration-200 ${isActive || isExpanded ? 'bg-white/15 text-white border-white/10 shadow-xs font-black' : 'bg-white/5 text-white/70 border-transparent hover:bg-white/10 hover:text-white'}`}
+              >
+                <span className="flex items-center gap-2">
+                  <Icon className={`h-4 w-4 ${isActive || isExpanded ? 'text-amber-400' : 'text-white/80'}`} />
+                  <span className="uppercase text-[10px] tracking-widest font-extrabold">{item.label}</span>
+                </span>
+                {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+              </button>
+              {isExpanded && renderNavigationItems(item.children, depth + 1)}
+            </div>
+          );
+        }
+
+        return (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => {
+              if (!item.target) return;
+              setActiveMainTab(item.target.mainTab);
+              if (item.target.subTab) setActiveSubTab(item.target.subTab);
+              setCurrentViewedCategory(item.target.categoryId ?? null);
+              setProfileDropdownOpen(false);
+              setMobileMenuOpen(false);
+            }}
+            className={`w-full rounded-xl px-3 py-2 flex items-center gap-2 text-left transition cursor-pointer font-bold ${isActive ? 'bg-amber-400 text-slate-900 shadow-sm' : 'text-white hover:bg-white/10'}`}
+          >
+            <Icon className={`h-3.5 w-3.5 ${isActive ? 'text-slate-900' : 'text-white/60'}`} />
+            <span className="truncate">{item.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
   const NavLinksMenuTree = () => (
     <div className="flex flex-col h-full justify-between select-none relative">
-      <div className="flex-1 overflow-y-auto pr-1 space-y-4 scrollbar-none text-left" style={{ maxHeight: 'calc(100vh - 230px)' }}>
-        
-        {/* Home Drawer */}
-        <div className="space-y-1">
-          <button onClick={() => setHomeExpanded(!homeExpanded)} className={`w-full py-2.5 px-3 flex items-center justify-between rounded-full border transition cursor-pointer duration-200 ${homeExpanded ? 'bg-white/15 text-white border-white/10 shadow-xs font-black' : 'bg-white/5 text-white/70 border-transparent hover:bg-white/10 hover:text-white'}`}>
-            <div className="flex items-center gap-2">
-              <Layers className={`w-4 h-4 ${homeExpanded ? 'text-amber-400' : 'text-white/80'}`} />
-              <span className="uppercase text-[10px] tracking-widest font-extrabold">Home</span>
-            </div>
-            {homeExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-          </button>
-          {homeExpanded && (
-            <div className="pl-4 border-l border-white/10 ml-5 space-y-1 pt-1 animate-fadeIn">
-              <button onClick={() => handleSelectStaticPage(null as any)} className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === null ? 'bg-amber-400 text-slate-900' : 'text-white hover:bg-white/10'}`}>
-                <BarChart3 className="w-3.5 h-3.5 text-white/60" /><span>Dashboard</span>
-              </button>
-              <button onClick={() => handleSelectStaticPage('training')} className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === 'training' ? 'bg-amber-400 text-slate-900' : 'text-white hover:bg-white/10'}`}>
-                <Terminal className="w-3.5 h-3.5 text-white/60" /><span>Training</span>
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Pickers Drawer */}
-        <div className="space-y-1">
-          <button onClick={() => setPickersExpanded(!pickersExpanded)} className={`w-full py-2.5 px-3 flex items-center justify-between rounded-full border transition cursor-pointer duration-200 ${activeMainTab === 'pickers' ? 'bg-white/15 text-white border-white/10 shadow-xs font-black' : 'bg-white/5 text-white/70 border-transparent hover:bg-white/10 hover:text-white'}`}>
-            <div className="flex items-center gap-2"><ClipboardList className={`w-4 h-4 ${activeMainTab === 'pickers' ? 'text-amber-400' : 'text-white/80'}`} /><span className="uppercase text-[10px] tracking-widest font-extrabold">Pickers</span></div>
-            {pickersExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-          </button>
-          {pickersExpanded && (
-            <div className="pl-4 border-l border-white/10 ml-5 space-y-1 pt-1 animate-fadeIn">
-              {[
-                { id: 'pickers_ready', label: 'Ready to Pick' },
-                { id: 'pickers_waiting', label: 'Waiting on Stock' },
-                { id: 'pickers_picked', label: 'Picked Orders' },
-              ].map((subTab) => (
-                <button
-                  key={subTab.id}
-                  onClick={() => {
-                    setActiveMainTab('pickers');
-                    setActiveSubTab(subTab.id);
-                    setCurrentViewedCategory(null);
-                    setProfileDropdownOpen(false);
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === 'pickers' && activeSubTab === subTab.id ? 'bg-amber-400 text-slate-900 shadow-sm' : 'text-white hover:bg-white/10'}`}
-                >
-                  <span className="truncate">{subTab.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Delivery */}
-
-
-        {/* Inventory Drawer */}
-        <div className="space-y-1">
-          <button onClick={() => setInventoryExpanded(!inventoryExpanded)} className={`w-full py-2.5 px-3 flex items-center justify-between rounded-full border transition cursor-pointer duration-200 ${inventoryExpanded ? 'bg-white/15 text-white border-white/10 shadow-xs font-black' : 'bg-white/5 text-white/70 border-transparent hover:bg-white/10 hover:text-white'}`}>
-            <div className="flex items-center gap-2"><Package className={`w-4 h-4 ${inventoryExpanded ? 'text-amber-400' : 'text-white/80'}`} /><span className="uppercase text-[10px] tracking-widest font-extrabold">Inventory</span></div>
-            {inventoryExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-          </button>
-          {inventoryExpanded && (
-            <div className="pl-4 border-l border-white/10 ml-5 space-y-1 pt-1 animate-fadeIn">
-              {sortedCategories.map((cat) => (
-                <button key={cat.id} onClick={() => handleSelectCategoryPage(cat.id)} className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === 'inventory_view' && currentViewedCategory === cat.id ? 'bg-amber-400 text-slate-900 shadow-sm' : 'text-white hover:bg-white/10'}`}>
-                  <Shirt className={`w-3.5 h-3.5 ${activeMainTab === 'inventory_view' && currentViewedCategory === cat.id ? 'text-slate-900' : 'text-white/60'}`} />
-                  <span className="truncate">{cat.name}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Management Drawer */}
-        {canSeeManagement && (
-          <div className="space-y-1">
-            <button onClick={() => setManagementExpanded(!managementExpanded)} className={`w-full py-2.5 px-3 flex items-center justify-between rounded-full border transition cursor-pointer duration-200 ${managementExpanded ? 'bg-white/15 text-white border-white/10 shadow-xs font-black' : 'bg-white/5 text-white/70 border-transparent hover:bg-white/10 hover:text-white'}`}>
-              <div className="flex items-center gap-2"><Wrench className={`w-4 h-4 ${managementExpanded ? 'text-amber-400' : 'text-white/80'}`} /><span className="uppercase text-[10px] tracking-widest font-extrabold">Management</span></div>
-              {managementExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-            </button>
-            {managementExpanded && (
-              <div className="pl-4 border-l border-white/10 ml-5 space-y-1 pt-1 animate-fadeIn">
-                {NAV_ITEMS.map((sub) => {
-                  const SubIcon = sub.icon;
-                  return (
-                    <button key={sub.id} onClick={() => handleSelectManagementPage(sub.id)} className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === 'management_view' && activeSubTab === sub.id ? 'bg-amber-400 text-slate-900 shadow-sm' : 'text-white hover:bg-white/10'}`}>
-                      <SubIcon className={`w-3.5 h-3.5 ${activeMainTab === 'management_view' && activeSubTab === sub.id ? 'text-slate-900' : 'text-white/60'}`} />
-                      <span className="truncate">{sub.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Admin Drawer */}
-        {canSeeAdmin && (
-          <div className="space-y-1">
-            <button onClick={() => setAdminExpanded(!adminExpanded)} className={`w-full py-2.5 px-3 flex items-center justify-between rounded-full border transition cursor-pointer duration-200 ${adminExpanded ? 'bg-white/15 text-white border-white/10 shadow-xs font-black' : 'bg-white/5 text-white/70 border-transparent hover:bg-white/10 hover:text-white'}`}>
-              <div className="flex items-center gap-2"><Settings className={`w-4 h-4 ${adminExpanded ? 'text-amber-400' : 'text-white/80'}`} /><span className="uppercase text-[10px] tracking-widest font-extrabold">Admin</span></div>
-              {adminExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-            </button>
-            {adminExpanded && (
-              <div className="pl-4 border-l border-white/10 ml-5 space-y-1 pt-1 animate-fadeIn">
-                <button onClick={() => handleSelectStaticPage('staff')} className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === 'staff' ? 'bg-amber-400 text-slate-900' : 'text-white hover:bg-white/10'}`}>
-                  <Users className="w-3.5 h-3.5 text-white/60" /><span>Manage Staff</span>
-                </button>
-                {(userRole === 'Dev' || userRole === 'Head_Dev') && canSeeDevTools && (
-                  <button onClick={() => handleSelectStaticPage('dev')} className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === 'dev' ? 'bg-amber-400 text-slate-900' : 'text-white hover:bg-white/10'}`}>
-                    <Terminal className="w-3.5 h-3.5 text-white/60" /><span>Dev Tools</span>
-                  </button>
-                )}
-                <button onClick={() => handleSelectStaticPage('statistics')} className={`w-full py-2 px-3 flex items-center gap-2 rounded-xl text-left transition cursor-pointer font-bold ${activeMainTab === 'statistics' ? 'bg-amber-400 text-slate-900' : 'text-white hover:bg-white/10'}`}>
-                  <BarChart3 className="w-3.5 h-3.5 text-white/60" /><span>Statistics</span>
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+      <div className="flex-1 overflow-y-auto pr-1 scrollbar-none text-left" style={{ maxHeight: 'calc(100vh - 230px)' }}>
+        {renderNavigationItems(filteredNavigationTree)}
       </div>
 
       <div className="relative mt-4 flex-shrink-0 w-full">
         {profileDropdownOpen && (
           <div className="absolute bottom-[calc(100%+10px)] left-0 w-full bg-slate-900 border border-white/10 rounded-2xl p-2 shadow-2xl flex flex-col gap-1 z-50 animate-fadeIn text-left">
-            <button onClick={() => handleSelectStaticPage('account')} className={`w-full py-2.5 px-3 flex items-center gap-2 rounded-xl transition cursor-pointer text-xs font-bold ${activeMainTab === 'account' ? 'bg-amber-400 text-slate-900' : 'text-white hover:bg-white/10'}`}>
-              <User className="w-3.5 h-3.5" /><span>Profile Settings</span>
-            </button>
-            <div className="h-[1px] bg-white/10 w-full my-0.5" />
             <button type="button" onClick={handleSignOut} className="w-full flex items-center gap-2 py-2.5 px-3 bg-brand-orange text-white rounded-xl text-xs font-bold transition-all hover:bg-orange-600 cursor-pointer shadow-md">
               <LogOut className="w-3.5 h-3.5 shrink-0" /><span>Sign Out Session</span>
             </button>

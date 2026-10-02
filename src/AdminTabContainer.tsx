@@ -49,23 +49,17 @@ export default function AdminTabContainer({
     <div className="w-full">
       {activeView === 'staff' && (
         <div className="w-full">
-          <UserManagement userRole={userRole} />
+          <UserManagement userRole={userRole} categories={categories.map(({ id, name }) => ({ id, name }))} />
         </div>
       )}
 
-      {activeView === 'dev' && (userRole === 'Dev' || userRole === 'Head_Dev') ? (
+      {activeView === 'dev' ? (
         <div className="w-full">
           <DevToolsDashboard userRole={userRole} />
         </div>
-      ) : activeView === 'dev' ? (
-        <div className="w-full bg-white border border-rose-100 p-8 rounded-3xl text-center text-slate-400 select-none max-w-xl animate-fadeIn">
-          <div className="w-10 h-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center mx-auto mb-3">⚠️</div>
-          <span className="block text-xs font-mono font-black uppercase tracking-wider text-slate-800">Clearance Access Denied</span>
-          <p className="text-[11px] font-medium text-slate-400 mt-1 leading-relaxed">This terminal is restricted. You do not possess structural credentials to view root developer assets.</p>
-        </div>
       ) : null}
 
-      {['categories', 'schoolTypes', 'schools', 'types', 'sizes', 'colours', 'locations'].includes(activeView) && (
+      {['categories', 'schoolTypes', 'schools', 'clothingTypes', 'sizes', 'colours', 'locations'].includes(activeView) && (
         <Management 
           schools={mappedSchools}
           clothingTypes={clothingTypes as any}

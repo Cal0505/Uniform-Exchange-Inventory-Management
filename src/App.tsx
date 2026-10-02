@@ -19,6 +19,8 @@ import StatsDashboard from './components/StatsDashboard';
 import Training from './components/Training';
 import Pickers from './components/Pickers';
 import { useFirestoreData } from './useFirestoreData'; 
+import { getEffectivePermissions } from './rbac';
+import { canAccessNavigationTarget, filterNavTreeByPermissions, getNavigationTree } from './navigation';
 
 interface AdvancedSchool {
   id: string; name: string; schoolType: 'JIN' | 'IN' | 'M' | 'H'; schoolIdCode: string; skuCode: string;
@@ -139,35 +141,36 @@ function MainApp() {
     new: typeof a.new === 'boolean' ? a.new : undefined,
   }));
 
-  const currentUserRoleObj = (dataPool.roles || []).find((r: any) => (r.name || '').toLowerCase() === userRole?.toLowerCase());
-  const currentUserWeight = currentUserRoleObj ? Number(currentUserRoleObj.weight || 0) : 0;
-  const isHeadDev = userRole === 'Head_Dev';
-  const canSeeManagement = isHeadDev || currentUserWeight >= 5;
-  const canSeeAdmin = isHeadDev || currentUserWeight >= 5;
-  const canSeeFullAccess = isHeadDev || currentUserWeight >= 10;
-
-  const effectiveMainTab = activeMainTab === 'management_view' && !canSeeManagement ? null
-    : activeMainTab === 'staff' && !canSeeAdmin ? null
-    : activeMainTab === 'statistics' && !canSeeAdmin ? null
-    : activeMainTab === 'dev' && !canSeeFullAccess ? null
-    : activeMainTab;
+  const navigationTree = getNavigationTree(dataPool.categories || []);
+  const rolePermissions = getEffectivePermissions(dataPool.roles || [], userRole);
+  const visibleNavigationTree = filterNavTreeByPermissions(navigationTree, rolePermissions);
+  const visibleManagementItems = visibleNavigationTree.find((item) => item.id === 'management')?.children || [];
+  const activeNavigationTarget = {
+    mainTab: activeMainTab,
+    ...(activeMainTab === 'pickers' || activeMainTab === 'management_view' ? { subTab: activeSubTab } : {}),
+    ...(activeMainTab === 'inventory_view' && currentViewedCategory ? { categoryId: currentViewedCategory } : {}),
+  };
+  const canAccessActiveTarget = canAccessNavigationTarget(navigationTree, rolePermissions, activeNavigationTarget);
+  const canAccessDashboard = canAccessNavigationTarget(navigationTree, rolePermissions, { mainTab: null });
+  const effectiveMainTab = canAccessActiveTarget ? activeMainTab : null;
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex flex-col xl:flex-row font-sans antialiased text-[#54595F] w-full">
       <NavBar 
-        categories={dataPool.categories || []} activeMainTab={activeMainTab} setActiveMainTab={setActiveMainTab}
+        navigationTree={navigationTree} activeMainTab={activeMainTab} setActiveMainTab={setActiveMainTab}
         activeSubTab={activeSubTab} setActiveSubTab={setActiveSubTab} currentViewedCategory={currentViewedCategory}
-        setCurrentViewedCategory={setCurrentViewedCategory} userRole={userRole} userName={userName} loggedInEmail={user.email || ''}
-        currentUserWeight={currentUserWeight}
+        setCurrentViewedCategory={setCurrentViewedCategory} userRole={userRole} userName={userName}
+        rolePermissions={rolePermissions}
         handleSignOut={handleSignOut} isFirebaseConnected={isFirebaseConnected} loading={!!dataPool.loading}
       />
       <main className="flex-1 p-4 md:p-8 xl:pl-72 pt-16 md:pt-20 xl:pt-4 overflow-x-hidden w-full">
-        {effectiveMainTab === null && <HomeLanding categories={dataPool.categories || []} schools={mappedSchools} inventory={dataPool.inventory || []} userRole={userRole} loggedInEmail={user.email || ''} newsFeed={newsFeed} tasksList={tasksList} users={dataPool.users || []} />}
+        {effectiveMainTab === null && canAccessDashboard && <HomeLanding categories={dataPool.categories || []} schools={mappedSchools} inventory={dataPool.inventory || []} userRole={userRole} loggedInEmail={user.email || ''} newsFeed={newsFeed} tasksList={tasksList} users={dataPool.users || []} />}
+        {!canAccessActiveTarget && <div className="rounded-xl border border-rose-200 bg-white p-6 text-sm font-bold text-rose-700">You do not have permission to view this area.</div>}
         {/* Render the new Training component here! */}
         {effectiveMainTab === 'training' && <Training userRole={userRole} loggedInEmail={user.email || ''} users={dataPool.users || []} />}
         {effectiveMainTab === 'pickers' && <Pickers activePickerTab={activeSubTab === 'pickers_waiting' ? 'waiting' : activeSubTab === 'pickers_picked' ? 'picked' : 'ready'} currentUserName={userName || 'Current Picker'} />}
         {effectiveMainTab === 'inventory_view' && <Inventory currentViewedCategory={currentViewedCategory} categories={dataPool.categories || []} schools={mappedSchools} clothingTypes={mapAttribute(dataPool.clothingTypes)} sizes={mapAttribute(dataPool.sizes)} colours={mapAttribute(dataPool.colours)} locations={mapAttribute(dataPool.locations)} inventory={dataPool.inventory || []} />}
-        {effectiveMainTab === 'management_view' && <Management schools={mappedSchools} clothingTypes={mapAttribute(dataPool.clothingTypes)} sizes={mapAttribute(dataPool.sizes)} colours={mapAttribute(dataPool.colours)} locations={mapAttribute(dataPool.locations)} categories={dataPool.categories || []} schoolTypes={dataPool.schoolTypes || []} userRole={userRole} activeTab={activeSubTab} setActiveTab={setActiveSubTab} />}
+        {effectiveMainTab === 'management_view' && <Management schools={mappedSchools} clothingTypes={mapAttribute(dataPool.clothingTypes)} sizes={mapAttribute(dataPool.sizes)} colours={mapAttribute(dataPool.colours)} locations={mapAttribute(dataPool.locations)} categories={dataPool.categories || []} schoolTypes={dataPool.schoolTypes || []} userRole={userRole} activeTab={activeSubTab} setActiveTab={setActiveSubTab} navigationItems={visibleManagementItems} />}
         {effectiveMainTab === 'staff' && <AdminTabContainer schools={mappedSchools as any} clothingTypes={mapAttribute(dataPool.clothingTypes) as any} sizes={mapAttribute(dataPool.sizes) as any} colours={mapAttribute(dataPool.colours) as any} locations={mapAttribute(dataPool.locations) as any} categories={dataPool.categories || []} itemTypes={[]} schoolTypes={dataPool.schoolTypes || []} userRole={userRole} forcedSubTabOverride="staff" />}
         
         {effectiveMainTab === 'dev' && <AdminTabContainer schools={[]} clothingTypes={[]} sizes={[]} colours={[]} locations={[]} categories={[]} itemTypes={[]} schoolTypes={[]} userRole={userRole} forcedSubTabOverride="dev" />}
