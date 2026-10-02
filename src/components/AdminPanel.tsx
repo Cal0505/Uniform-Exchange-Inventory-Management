@@ -52,7 +52,7 @@ export default function AdminPanel({
   const handleAddStaffManually = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStaffEmail.trim() || !newStaffName.trim()) {
-      return showNotification('error', 'All validation fields are required to invite staff.');
+      return showNotification('error', 'Enter a name and email address to add a staff member.');
     }
     try {
       await addDoc(collection(db, 'users'), {
@@ -62,7 +62,7 @@ export default function AdminPanel({
         status: 'Active'
       });
       setNewStaffEmail(''); setNewStaffName('');
-      showNotification('success', 'Staff credential profile issued successfully.');
+      showNotification('success', 'Staff profile created successfully.');
       fetchStaffUsers();
     } catch (e: any) { showNotification('error', e.message); }
   };
@@ -103,20 +103,20 @@ export default function AdminPanel({
       {currentAdminView === 'staff' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           <div className="bg-white border border-slate-200 rounded-3xl p-5 space-y-4 shadow-xs border-t-4 border-brand-teal">
-            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2"><Users className="w-4 h-4 text-brand-teal" /> Issue Staff Invite</h4>
+            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2"><Users className="w-4 h-4 text-brand-teal" /> Add Staff Member</h4>
             <form onSubmit={handleAddStaffManually} className="space-y-4 text-xs font-bold">
-              <div><label className="block mb-1 text-[10px] font-black text-slate-500 uppercase tracking-wider">Full User Name</label><input type="text" placeholder="e.g. Sarah Jenkins" value={newStaffName} onChange={(e) => setNewStaffName(e.target.value)} className="w-full p-2.5 border rounded-xl font-medium text-slate-800" /></div>
+              <div><label className="block mb-1 text-[10px] font-black text-slate-500 uppercase tracking-wider">Full Name</label><input type="text" placeholder="e.g. Sarah Jenkins" value={newStaffName} onChange={(e) => setNewStaffName(e.target.value)} className="w-full p-2.5 border rounded-xl font-medium text-slate-800" /></div>
               <div><label className="block mb-1 text-[10px] font-black text-slate-500 uppercase tracking-wider">Email Address</label><input type="email" placeholder="sarah@uniformexchange.org" value={newStaffEmail} onChange={(e) => setNewStaffEmail(e.target.value)} className="w-full p-2.5 border rounded-xl font-medium text-slate-800" /></div>
-              <div><label className="block mb-1 text-[10px] font-black text-slate-500 uppercase tracking-wider">Clearance Privilege Level</label><select value={newStaffRole} onChange={(e) => setNewStaffRole(e.target.value as any)} className="w-full p-2.5 border rounded-xl bg-white font-bold text-slate-700"><option value="Staff">Warehouse Staff Picking Access</option><option value="Admin">Full System Manager Privileges</option></select></div>
-              <button type="submit" className="w-full py-2.5 px-4 bg-brand-primary text-white font-black uppercase tracking-wider rounded-xl cursor-pointer shadow-xs transition hover:brightness-105">Issue Credentials</button>
+              <div><label className="block mb-1 text-[10px] font-black text-slate-500 uppercase tracking-wider">Role</label><select value={newStaffRole} onChange={(e) => setNewStaffRole(e.target.value as any)} className="w-full p-2.5 border rounded-xl bg-white font-bold text-slate-700"><option value="Staff">Staff</option><option value="Admin">Administrator</option></select></div>
+              <button type="submit" className="w-full py-2.5 px-4 bg-brand-primary text-white font-black uppercase tracking-wider rounded-xl cursor-pointer shadow-xs transition hover:brightness-105">Create Staff Profile</button>
             </form>
           </div>
 
           <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl p-5 shadow-xs">
-            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider mb-4">Active Staff Credentials Logs</h4>
+            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider mb-4">Staff Accounts</h4>
             <div className="overflow-hidden border border-slate-100 bg-white rounded-2xl">
               <table className="w-full text-left text-xs text-slate-600 border-collapse">
-                <thead className="bg-slate-50 font-bold border-b text-slate-700 select-none"><tr><th className="px-4 py-3.5">User Identity Details</th><th className="px-4 py-3.5">System Role</th><th className="px-4 py-3.5">Status</th><th className="px-4 py-3.5 text-right">Actions</th></tr></thead>
+                <thead className="bg-slate-50 font-bold border-b text-slate-700 select-none"><tr><th className="px-4 py-3.5">User Details</th><th className="px-4 py-3.5">System Role</th><th className="px-4 py-3.5">Status</th><th className="px-4 py-3.5 text-right">Actions</th></tr></thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
                   {staffUsers.map((user) => (
                     <tr key={user.id} className="hover:bg-slate-50/40 transition">

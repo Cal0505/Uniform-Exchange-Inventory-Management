@@ -390,7 +390,7 @@ export default function AddStockModal({
           }
         });
 
-        setFormSuccess(`Stored ${singlesQuantity} singles onto shelf ${cleanShelf} successfully.`);
+        setFormSuccess(`Stored ${singlesQuantity} single items on shelf ${cleanShelf}.`);
       } else {
         const docId = skuid;
         const docRef = doc(db, 'inventory', docId);
@@ -416,7 +416,7 @@ export default function AddStockModal({
           updatedAt: serverTimestamp(),
         });
 
-        setFormSuccess(`Stored VacPac #${packNumber} with ${unitsPerPack} items successfully.`);
+        setFormSuccess(`Stored VacPac #${packNumber} (${unitsPerPack} items).`);
         setPackNumber((current) => current + 1);
       }
     } catch (err: any) {

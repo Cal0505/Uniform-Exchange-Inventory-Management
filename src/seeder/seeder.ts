@@ -53,7 +53,7 @@ export const runDatabaseSeeder = async (): Promise<void> => {
   })).filter(g => g.skuPrefix);
 
   const sizesList = rawSizes.map(row => ({
-    category: String(row['Catagory'] || '').trim(),
+    category: String(row['Category'] || row['Catagory'] || '').trim(),
     sizeId: String(row['Size_ID'] || '').trim(),
     name: String(row['Size'] || '').trim()
   })).filter(sz => sz.name);

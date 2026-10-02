@@ -358,7 +358,7 @@ export default function CsvImportModal({
       }
 
       await batch.commit();
-      setSuccess(`Import completed! Successfully registered/updated ${count} stock items.`);
+      setSuccess(`Import complete: ${count} stock items were registered or updated.`);
       setCsvText('');
       setExcelRows(null);
     } catch (err: any) {

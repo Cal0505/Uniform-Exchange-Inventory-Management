@@ -456,13 +456,13 @@ export default function ManagementDashboard({
       await batch.commit();
 
       Object.assign(originalItem, updatedFields);
-      alert(`Successfully updated ${entityReadableName}. Log entry created for ${authorizedUserName}.`);
+      alert(`${entityReadableName} updated successfully. An activity log entry was created for ${authorizedUserName}.`);
       setEditingRowId(null);
       setEditFormFields({});
       
     } catch (e) {
       console.error(e);
-      alert("An error occurred executing update routines.");
+      alert('An error occurred while updating the record.');
     } finally {
       setIsSubmitting(false);
     }
@@ -690,7 +690,7 @@ export default function ManagementDashboard({
           <div>
             <div className="mb-4">
               <h3 className="text-sm font-bold text-slate-900">Categories</h3>
-              <p className="text-xs text-slate-500">Manage Categories to group inventory Lists (EG Logo, Plain) and control each Catergory if it handles Single(Loose) items or VacPac(boxs, or other containers) and has a School tied to it.</p>
+              <p className="text-xs text-slate-500">Use categories to group inventory (for example, Logo and Plain). Choose whether each category tracks single items, VacPacs, or both, and whether it is linked to a school.</p>
             </div>
             <form onSubmit={handleAddCategorySubmit} className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
               <input type="text" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} placeholder="Category Name" className="text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-[#00A896]" />

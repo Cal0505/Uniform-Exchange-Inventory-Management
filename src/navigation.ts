@@ -55,10 +55,12 @@ export function getNavigationTree(categories: NavigationCategory[] = []): Naviga
       ],
     },
     {
-      id: 'pickers', label: 'Pickers', icon: ClipboardList, children: [
+      id: 'pickers', label: 'Orders', icon: ClipboardList, children: [
+        { id: 'orders_received', label: 'Received Orders', icon: ClipboardList, target: { mainTab: 'pickers', subTab: 'pickers_received' } },
         { id: 'pickers_ready', label: 'Ready to Pick', icon: ClipboardList, target: { mainTab: 'pickers', subTab: 'pickers_ready' } },
         { id: 'pickers_waiting', label: 'Waiting on Stock', icon: Clock, target: { mainTab: 'pickers', subTab: 'pickers_waiting' } },
         { id: 'pickers_picked', label: 'Picked Orders', icon: Package, target: { mainTab: 'pickers', subTab: 'pickers_picked' } },
+        { id: 'pickers_deliveries', label: 'Deliveries', icon: Package, target: { mainTab: 'pickers', subTab: 'pickers_deliveries' } },
       ],
     },
     {

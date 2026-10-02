@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp, getDoc, getDocs, query, where } from 'firebase/firestore';
-import { Search, Trash2, User, Settings, Filter, Plus, X, Edit2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Search, Trash2, User, Settings, Filter, Plus, X, Edit2 } from 'lucide-react';
 import { getEffectivePermissions, getLegacyPermissions } from '../rbac';
 import { expandNavigationPermissions, flattenNavigationTree, getNavigationTree, hasNavigationPermission, type NavigationCategory, type NavigationItem } from '../navigation';
+import { groupTrainingModules } from '../trainingModules';
 
 interface Slide { text: string; imageUrl: string; }
 interface UserManagementProps { userRole: string; categories: NavigationCategory[]; }
@@ -18,8 +19,10 @@ export default function UserManagement({ userRole, categories }: UserManagementP
   const [newRoleWeight, setNewRoleWeight] = useState('0');
   const [newRolePermissions, setNewRolePermissions] = useState<string[]>([]);
   const [roleDraft, setRoleDraft] = useState<{ id: string; name: string; weight: string; permissions: string[] } | null>(null);
+  const [expandedPermissionGroups, setExpandedPermissionGroups] = useState<Record<string, boolean>>({});
 
   const [trainingModules, setTrainingModules] = useState<any[]>([]);
+  const [expandedTrainingGroups, setExpandedTrainingGroups] = useState<Record<string, boolean>>({});
   const [activeSection, setActiveSection] = useState<'directory' | 'roles' | 'training' | 'create_task' | 'publish_news'>('directory');
   
   // New structured training fields
@@ -208,28 +211,44 @@ export default function UserManagement({ userRole, categories }: UserManagementP
         const Icon = item.icon;
         const branchIds = flattenNavigationTree([item]).map(({ id }) => id);
         const canGrantPermission = hasNavigationPermission(navigationTree, currentUserPermissions, item.id);
+        const hasChildren = !!item.children?.length;
+        const isExpanded = !!expandedPermissionGroups[item.id];
         return (
           <div key={item.id}>
-            <label className={`flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 ${canGrantPermission ? '' : 'opacity-50'}`}>
-              <input
-                type="checkbox"
-                checked={permissions.includes(item.id)}
-                disabled={!canGrantPermission}
-                onChange={() => {
-                  if (permissions.includes(item.id)) {
-                    setPermissions(permissions.filter(permission => !branchIds.includes(permission)));
-                    return;
-                  }
-                  setPermissions(Array.from(new Set([...permissions, ...ancestors, item.id])));
-                }}
-                className="h-4 w-4 accent-teal-700"
-              />
-              <Icon className="h-3.5 w-3.5 shrink-0" />
-              {item.label}
-            </label>
-            {item.children && (
-              <div className="ml-3 mt-2 border-l border-slate-200 pl-3">
-                {renderPermissionOptions(item.children, permissions, setPermissions, [...ancestors, item.id])}
+            <div className={`flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 ${canGrantPermission ? '' : 'opacity-50'}`}>
+              {hasChildren ? (
+                <button
+                  type="button"
+                  aria-expanded={isExpanded}
+                  aria-controls={`role-permissions-${item.id}`}
+                  aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${item.label} permissions`}
+                  onClick={() => setExpandedPermissionGroups((current) => ({ ...current, [item.id]: !current[item.id] }))}
+                  className="rounded p-1 text-slate-500 hover:bg-slate-100"
+                >
+                  {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                </button>
+              ) : <span className="w-5" />}
+              <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={permissions.includes(item.id)}
+                  disabled={!canGrantPermission}
+                  onChange={() => {
+                    if (permissions.includes(item.id)) {
+                      setPermissions(permissions.filter(permission => !branchIds.includes(permission)));
+                      return;
+                    }
+                    setPermissions(Array.from(new Set([...permissions, ...ancestors, item.id])));
+                  }}
+                  className="h-4 w-4 accent-teal-700"
+                />
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{item.label}</span>
+              </label>
+            </div>
+            {hasChildren && isExpanded && (
+              <div id={`role-permissions-${item.id}`} className="ml-3 mt-2 border-l border-slate-200 pl-3">
+                {renderPermissionOptions(item.children || [], permissions, setPermissions, [...ancestors, item.id])}
               </div>
             )}
           </div>
@@ -386,6 +405,7 @@ export default function UserManagement({ userRole, categories }: UserManagementP
   };
 
   const sortedRoles = [...roles].sort((a, b) => Number(b.weight || 0) - Number(a.weight || 0));
+  const trainingModuleGroups = useMemo(() => groupTrainingModules(trainingModules), [trainingModules]);
 
   const filteredUsers = usersList.filter(user => {
     const matchesSearch = (user.displayName || '').toLowerCase().includes(searchQuery.toLowerCase());
@@ -398,7 +418,7 @@ export default function UserManagement({ userRole, categories }: UserManagementP
     <div className="w-full text-left font-sans pl-2 pr-6 py-4 space-y-6 relative select-none animate-fadeIn">
       <div>
         <h2 className="text-sm font-black text-teal-800 uppercase tracking-wider flex items-center gap-1.5">Manage Staff</h2>
-        <p className="text-[11px] font-medium text-amber-700 mt-1">Oversee user configurations, modify system role hierarchy authority levels, and handle pending approvals.</p>
+        <p className="text-[11px] font-medium text-amber-700 mt-1">Manage staff accounts, role permissions, and pending approvals.</p>
       </div>
 
       <div className="flex flex-wrap gap-2 bg-amber-50 p-3 rounded-3xl border border-amber-200">
@@ -553,10 +573,12 @@ export default function UserManagement({ userRole, categories }: UserManagementP
                               <input required type="number" min="0" step="1" value={roleDraft.weight} onChange={(e) => setRoleDraft({ ...roleDraft, weight: e.target.value })} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white p-2.5 text-sm font-medium" />
                             </label>
                           </div>
-                          <fieldset>
-                            <legend className="mb-2 font-bold text-slate-700">Application permissions</legend>
+                          <details className="rounded-lg border border-slate-200 bg-white p-3">
+                            <summary className="cursor-pointer text-xs font-bold text-slate-700">Application permissions</summary>
+                            <div className="mt-3">
                             {renderPermissionOptions(navigationTree, roleDraft.permissions, (permissions) => setRoleDraft({ ...roleDraft, permissions }))}
-                          </fieldset>
+                            </div>
+                          </details>
                           <div className="flex justify-end gap-2 border-t border-teal-200 pt-3">
                             <button type="button" onClick={() => setRoleDraft(null)} className="rounded-lg bg-white px-4 py-2.5 font-bold text-slate-700">Cancel</button>
                             <button type="submit" className="rounded-lg bg-teal-700 px-4 py-2.5 font-black uppercase tracking-wider text-white hover:bg-teal-800">Save</button>
@@ -581,10 +603,12 @@ export default function UserManagement({ userRole, categories }: UserManagementP
                 Clearance rank
                 <input required type="number" min="0" step="1" value={newRoleWeight} onChange={(e) => setNewRoleWeight(e.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white p-2.5 text-sm font-medium" />
               </label>
-              <fieldset>
-                <legend className="mb-2 text-xs font-bold text-slate-700">Application permissions</legend>
+              <details className="rounded-lg border border-slate-200 bg-white p-3">
+                <summary className="cursor-pointer text-xs font-bold text-slate-700">Application permissions</summary>
+                <div className="mt-3">
                 {renderPermissionOptions(navigationTree, newRolePermissions, setNewRolePermissions)}
-              </fieldset>
+                </div>
+              </details>
               <div className="flex gap-2 border-t border-amber-200 pt-3">
                 <button type="submit" className="flex-1 rounded-lg bg-orange-500 px-3 py-2.5 text-xs font-black uppercase tracking-wider text-white hover:bg-orange-600">Create Role</button>
               </div>
@@ -599,7 +623,7 @@ export default function UserManagement({ userRole, categories }: UserManagementP
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
               <div>
-                <h3 className="text-lg font-bold text-teal-800">Training Modules</h3>
+                <h3 className="text-lg font-bold text-teal-800">Add Training Modules</h3>
                 <p className="text-sm text-amber-700 mt-1">Create training assignments, publish announcements, and assign tasks to staff roles or users.</p>
               </div>
               <span className="text-xs uppercase tracking-[0.2em] text-teal-700">{trainingModules.length} modules</span>
@@ -621,6 +645,7 @@ export default function UserManagement({ userRole, categories }: UserManagementP
                 </label>
               </div>
 
+              {moduleNumber !== '' && moduleNumber > 0 && moduleLetter.trim() && newTrainingTitle.trim() && <>
               <label className="block text-sm font-semibold text-teal-800">
                   Description
                   <textarea value={newTrainingDescription} onChange={(e) => setNewTrainingDescription(e.target.value)} className="mt-2 w-full p-3 border border-amber-200 rounded-2xl text-sm focus:outline-teal-500" placeholder="A short description of the training..." />
@@ -657,31 +682,53 @@ export default function UserManagement({ userRole, categories }: UserManagementP
               </label>
               
               <button type="submit" className="w-full bg-orange-500 text-white rounded-2xl py-3 text-sm font-bold cursor-pointer hover:bg-orange-600 transition">Add Training Module</button>
+              </>}
             </form>
           </div>
 
           <div className="bg-teal-50 border border-teal-200 rounded-2xl p-5 shadow-sm">
-            <h4 className="text-sm font-bold uppercase tracking-[0.18em] text-teal-800 mb-4">Existing Modules</h4>
+            <h4 className="text-sm font-bold uppercase tracking-[0.18em] text-teal-800 mb-4">Existing Training Modules</h4>
             <div className="space-y-4">
-              {trainingModules.length > 0 ? trainingModules.map((module) => (
-                <div key={module.id} className="border border-teal-100 rounded-2xl p-4 bg-white shadow-sm hover:border-teal-300 transition">
-                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                    <div className="space-y-2">
-                      <p className="text-sm font-bold text-teal-900">{module.title}</p>
-                      <p className="text-xs text-slate-500 italic">{module.description || 'No description provided'}</p>
-                      <p className="text-sm text-teal-700 leading-relaxed">Contains {module.slides?.length || 0} slides</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button type="button" onClick={() => handleOpenEditModule(module)} className="rounded-full bg-amber-100 hover:bg-amber-200 transition px-3 py-2 text-amber-700 text-xs font-black uppercase tracking-wider cursor-pointer">
-                        Edit
-                      </button>
-                      <button type="button" onClick={() => window.confirm('Delete this training module?') && handleDeleteTrainingModule(module.id)} className="rounded-full bg-rose-100 hover:bg-rose-200 transition px-3 py-2 text-rose-700 text-xs font-black uppercase tracking-wider cursor-pointer">
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )) : (
+              {trainingModuleGroups.length > 0 ? trainingModuleGroups.map((group) => {
+                const isExpanded = !!expandedTrainingGroups[group.key];
+                return (
+                  <section key={group.key} className="overflow-hidden rounded-xl border border-teal-100 bg-white shadow-sm">
+                    <button
+                      type="button"
+                      aria-expanded={isExpanded}
+                      onClick={() => setExpandedTrainingGroups((current) => ({ ...current, [group.key]: !current[group.key] }))}
+                      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-teal-50"
+                    >
+                      <span className="font-bold text-teal-900">{group.label}</span>
+                      <span className="ml-auto text-[10px] font-semibold text-slate-500">{group.modules.length} {group.modules.length === 1 ? 'module' : 'modules'}</span>
+                      {isExpanded ? <ChevronDown className="h-4 w-4 text-teal-700" /> : <ChevronRight className="h-4 w-4 text-teal-700" />}
+                    </button>
+                    {isExpanded && (
+                      <div className="space-y-3 border-t border-slate-100 bg-slate-50/50 p-3">
+                        {group.modules.map((module) => (
+                          <div key={module.id} className="border border-teal-100 rounded-xl p-4 bg-white shadow-sm hover:border-teal-300 transition">
+                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                              <div className="space-y-2">
+                                <p className="text-sm font-bold text-teal-900">{module.title}</p>
+                                <p className="text-xs text-slate-500 italic">{module.description || 'No description provided'}</p>
+                                <p className="text-sm text-teal-700 leading-relaxed">Contains {module.slides?.length || 0} slides</p>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button type="button" onClick={() => handleOpenEditModule(module)} className="rounded-full bg-amber-100 hover:bg-amber-200 transition px-3 py-2 text-amber-700 text-xs font-black uppercase tracking-wider cursor-pointer">
+                                  Edit
+                                </button>
+                                <button type="button" onClick={() => window.confirm('Delete this training module?') && handleDeleteTrainingModule(module.id)} className="rounded-full bg-rose-100 hover:bg-rose-200 transition px-3 py-2 text-rose-700 text-xs font-black uppercase tracking-wider cursor-pointer">
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                );
+              }) : (
                 <p className="text-sm text-teal-700">No training modules have been created yet.</p>
               )}
             </div>

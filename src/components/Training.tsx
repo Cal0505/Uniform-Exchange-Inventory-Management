@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase';
 import { collection, doc, getDoc, setDoc, onSnapshot, arrayUnion } from 'firebase/firestore';
-import { CheckCircle, ArrowRight, X } from 'lucide-react';
+import { CheckCircle, ArrowRight, ChevronDown, ChevronRight, X } from 'lucide-react';
+import { groupTrainingModules } from '../trainingModules';
 
 interface TrainingProps {
   userRole: string;
@@ -14,6 +15,7 @@ export default function Training({ userRole, loggedInEmail, users }: TrainingPro
   const [lessonsCompleted, setLessonsCompleted] = useState<string[]>([]);
   const [activeModule, setActiveModule] = useState<any | null>(null);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+  const [expandedTrainingGroups, setExpandedTrainingGroups] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const unsubModules = onSnapshot(collection(db, 'training_modules'), (snap) => {
@@ -35,13 +37,14 @@ export default function Training({ userRole, loggedInEmail, users }: TrainingPro
     return () => unsubModules();
   }, [loggedInEmail]);
 
-  const filteredModules = trainingModules.filter((module) => {
+  const filteredModules = useMemo(() => trainingModules.filter((module) => {
     const roles = Array.isArray(module.roles) ? module.roles : [];
     const targetUsers = Array.isArray(module.targetUsers) ? module.targetUsers : [];
     if (targetUsers.includes(loggedInEmail)) return true;
     if (roles.includes(userRole) || roles.includes('Everyone')) return true;
     return roles.length === 0 && targetUsers.length === 0;
-  });
+  }), [trainingModules, userRole, loggedInEmail]);
+  const trainingModuleGroups = useMemo(() => groupTrainingModules(filteredModules), [filteredModules]);
 
   const handleViewModule = (mod: any) => {
     setActiveModule(mod);
@@ -84,20 +87,41 @@ export default function Training({ userRole, loggedInEmail, users }: TrainingPro
           {/* --- TEST HEADER END --- */}
 
           <h2 className="text-2xl font-black text-slate-800">Training Modules</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredModules.map((lesson) => {
-              const done = lessonsCompleted.includes(lesson.id);
+          <div className="space-y-4">
+            {trainingModuleGroups.map((group) => {
+              const isExpanded = !!expandedTrainingGroups[group.key];
               return (
-                <div key={lesson.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
-                  <h3 className="font-bold text-slate-900 mb-2">{lesson.title}</h3>
-                  <p className="text-slate-500 text-sm mb-3 line-clamp-2">{lesson.description || 'No description provided.'}</p>
-                  <button 
-                    onClick={() => handleViewModule(lesson)} 
-                    className={`w-full py-2 rounded-xl font-bold text-sm ${done ? 'bg-emerald-100 text-emerald-700' : 'bg-brand-primary text-white'}`}
+                <section key={group.key} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <button
+                    type="button"
+                    aria-expanded={isExpanded}
+                    onClick={() => setExpandedTrainingGroups((current) => ({ ...current, [group.key]: !current[group.key] }))}
+                    className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left hover:bg-slate-50"
                   >
-                    {done ? 'Completed' : 'View Module'}
+                    <span className="font-black text-slate-900">{group.label}</span>
+                    <span className="ml-auto text-xs font-semibold text-slate-500">{group.modules.length} {group.modules.length === 1 ? 'module' : 'modules'}</span>
+                    {isExpanded ? <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" /> : <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" />}
                   </button>
-                </div>
+                  {isExpanded && (
+                    <div className="grid grid-cols-1 gap-4 border-t border-slate-100 bg-slate-50/50 p-4 md:grid-cols-2 lg:grid-cols-3">
+                      {group.modules.map((lesson) => {
+                        const done = lessonsCompleted.includes(lesson.id);
+                        return (
+                          <div key={lesson.id} className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                            <h3 className="mb-2 font-bold text-slate-900">{lesson.title}</h3>
+                            <p className="mb-3 line-clamp-2 text-sm text-slate-500">{lesson.description || 'No description provided.'}</p>
+                            <button
+                              onClick={() => handleViewModule(lesson)}
+                              className={`mt-auto w-full rounded-xl py-2 text-sm font-bold ${done ? 'bg-emerald-100 text-emerald-700' : 'bg-brand-primary text-white'}`}
+                            >
+                              {done ? 'Completed' : 'View Module'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
               );
             })}
           </div>

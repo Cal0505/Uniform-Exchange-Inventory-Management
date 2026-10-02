@@ -18,6 +18,7 @@ export default function DevToolsDashboard({ userRole }: DevToolsDashboardProps) 
   const [isBypassActive, setIsBypassActive] = useState(false);
   const [isTogglingBypass, setIsTogglingBypass] = useState(false);
   const [isClearingCollection, setIsClearingCollection] = useState<string | null>(null);
+  const [isSeedingOrders, setIsSeedingOrders] = useState(false);
 
   useEffect(() => {
     const qLogs = query(collection(db, 'activity_logs'), orderBy('timestamp', 'desc'));
@@ -113,6 +114,21 @@ export default function DevToolsDashboard({ userRole }: DevToolsDashboardProps) 
     } catch (err) { console.error(err); } finally { setIsClearingCollection(null); }
   };
 
+  const handleSeedTestingOrders = async () => {
+    if (!window.confirm('Replace all current orders with 50 new testing orders across the workflow queues?')) return;
+    try {
+      setIsSeedingOrders(true);
+      const { seedTestingOrders } = await import('../demoOrders');
+      await seedTestingOrders();
+      alert('Testing orders added: 10 orders for each workflow queue.');
+    } catch (err) {
+      console.error(err);
+      alert('Could not restore testing orders. Check the console for details.');
+    } finally {
+      setIsSeedingOrders(false);
+    }
+  };
+
   const handleFlushCacheAndResync = () => { window.location.reload(); };
 
   const filteredLogs = logsList.filter(log => {
@@ -150,6 +166,8 @@ export default function DevToolsDashboard({ userRole }: DevToolsDashboardProps) 
         <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4">
           <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5"><Trash2 className="w-4 h-4 text-rose-500" /> Database Collection Clearers</h4>
           <div className="space-y-2">
+            <button type="button" onClick={handleSeedTestingOrders} disabled={isSeedingOrders || !!isClearingCollection} className="w-full p-2 bg-emerald-50 border hover:bg-emerald-100 border-transparent hover:border-emerald-300 text-emerald-800 hover:text-emerald-900 transition font-black uppercase text-[10px] tracking-wider rounded-xl flex items-center justify-between cursor-pointer disabled:opacity-50"><span>Add Testing Orders</span>{isSeedingOrders ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}</button>
+            <button type="button" onClick={() => handleClearCollectionPool('orders', 'Testing Orders Database')} disabled={!!isClearingCollection} className="w-full p-2 bg-amber-50 border hover:bg-amber-100 border-transparent hover:border-amber-300 text-amber-800 hover:text-amber-900 transition font-black uppercase text-[10px] tracking-wider rounded-xl flex items-center justify-between cursor-pointer"><span>Reset Testing Orders</span>{isClearingCollection === 'orders' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}</button>
             <button type="button" onClick={() => handleClearCollectionPool('user_requests', 'User Signup Requests Queue')} disabled={!!isClearingCollection} className="w-full p-2 bg-slate-50 border hover:bg-rose-50 border-transparent hover:border-rose-200 text-slate-700 hover:text-rose-600 transition font-black uppercase text-[10px] tracking-wider rounded-xl flex items-center justify-between cursor-pointer"><span>Wipe User Requests Queue</span>{isClearingCollection === 'user_requests' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}</button>
             <button type="button" onClick={() => handleClearCollectionPool('tasks', 'Warehouse Tasks Database')} disabled={!!isClearingCollection} className="w-full p-2 bg-slate-50 border hover:bg-rose-50 border-transparent hover:border-rose-200 text-slate-700 hover:text-rose-600 transition font-black uppercase text-[10px] tracking-wider rounded-xl flex items-center justify-between cursor-pointer"><span>Wipe Active Tasks List</span>{isClearingCollection === 'tasks' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}</button>
             <button type="button" onClick={() => handleClearCollectionPool('news_feed', 'Announcements News Feed')} disabled={!!isClearingCollection} className="w-full p-2 bg-slate-50 border hover:bg-rose-50 border-transparent hover:border-rose-200 text-slate-700 hover:text-rose-600 transition font-black uppercase text-[10px] tracking-wider rounded-xl flex items-center justify-between cursor-pointer"><span>Wipe Broadcast News Feed</span>{isClearingCollection === 'news_feed' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}</button>

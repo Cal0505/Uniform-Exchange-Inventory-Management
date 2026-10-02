@@ -114,7 +114,7 @@ export default function NavBar({
         {profileDropdownOpen && (
           <div className="absolute bottom-[calc(100%+10px)] left-0 w-full bg-slate-900 border border-white/10 rounded-2xl p-2 shadow-2xl flex flex-col gap-1 z-50 animate-fadeIn text-left">
             <button type="button" onClick={handleSignOut} className="w-full flex items-center gap-2 py-2.5 px-3 bg-brand-orange text-white rounded-xl text-xs font-bold transition-all hover:bg-orange-600 cursor-pointer shadow-md">
-              <LogOut className="w-3.5 h-3.5 shrink-0" /><span>Sign Out Session</span>
+              <LogOut className="w-3.5 h-3.5 shrink-0" /><span>Sign Out</span>
             </button>
           </div>
         )}
