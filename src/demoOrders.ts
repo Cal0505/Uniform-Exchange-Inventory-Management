@@ -5,6 +5,7 @@ import { generateOrderNumber } from './orderLifecycle';
 const FIRST_NAMES = ['Ava', 'Noah', 'Ella', 'Liam', 'Sophia', 'Mason', 'Ruby', 'Leo', 'Grace', 'Zoe', 'Daniel', 'Mia', 'Oscar', 'Nia', 'Isaac', 'Harper', 'Ben', 'Layla', 'Theo', 'Olivia'];
 const LAST_NAMES = ['Patel', 'Brown', 'Smith', 'Johnson', 'Taylor', 'Wilson', 'Green', 'Clark', 'Hughes', 'Lee', 'Walker', 'Roberts', 'Mason', 'Cooper', 'Baker', 'Price', 'Ward', 'King', 'Turner', 'Allen'];
 const SCHOOLS = ['North Hill Academy', 'Harbour View Primary', 'St. Josephs', 'Kingsway College', 'Riverside School', 'Oak Valley Academy', 'Lakeside Primary', 'Elm Park Prep', 'Sunrise Academy', 'Willow Grove School'];
+const REQUESTER_RELATIONSHIPS = ['Parent', 'School Teacher', 'Social Worker'] as const;
 const ITEM_TYPES = [
   { name: 'Jumper', code: 'JUM' },
   { name: 'Polo Shirt', code: 'POL' },
@@ -81,6 +82,7 @@ function buildOrder(status: 'Received' | 'Ready to Pick' | 'Awaiting Stock' | 'C
   const result: any = {
     status,
     customerName: requesterName,
+    requesterRelationship: pick(REQUESTER_RELATIONSHIPS),
     school,
     dueTime,
     priorityLevel: pick(PRIORITIES),

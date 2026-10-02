@@ -79,6 +79,7 @@ interface PickerOrder {
   id: string;
   orderNumber: string;
   customerName: string;
+  requesterRelationship?: string;
   school: string;
   dueTime: string;
   priority?: boolean;
@@ -113,6 +114,7 @@ export default function Pickers({ activePickerTab: controlledTab, currentUserId,
   const [sortField, setSortField] = useState<SortField>('priority');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [loadingOrders, setLoadingOrders] = useState(true);
+  const [claimingOrderId, setClaimingOrderId] = useState<string | null>(null);
   const [orderError, setOrderError] = useState('');
   const [orderNotice, setOrderNotice] = useState('');
   const activePickerTab = controlledTab ?? 'ready';
@@ -139,6 +141,7 @@ export default function Pickers({ activePickerTab: controlledTab, currentUserId,
         id: orderDocument.id,
         orderNumber: data.orderNumber || orderDocument.id,
         customerName: data.customerName || data.studentName || 'Customer',
+        requesterRelationship: data.requesterRelationship || data.relationshipToChildren || data.relationship || '',
         school: data.school || data.schoolName || 'School not specified',
         dueTime: data.dueTime || '',
         status: legacyStatuses[data.status] || data.status || 'Received',
@@ -188,16 +191,19 @@ export default function Pickers({ activePickerTab: controlledTab, currentUserId,
   const handleOpenOrder = (orderId: string) => setSelectedOrderId(orderId);
 
   const handleClaimOrder = async (orderId: string) => {
+    setOrderError('');
     if (activeClaimCount >= maxActiveClaims) {
       setOrderError(`You already have ${maxActiveClaims} active claimed orders. Complete one before claiming another.`);
       return;
     }
     try {
-      setOrderError('');
+      setClaimingOrderId(orderId);
       await claimOrder(orderId, currentUserId, currentUserName);
       setSelectedOrderId(orderId);
     } catch (error) {
       setOrderError(error instanceof Error ? error.message : 'Could not claim this order. It may have been claimed by another user.');
+    } finally {
+      setClaimingOrderId(null);
     }
   };
 
@@ -454,17 +460,6 @@ export default function Pickers({ activePickerTab: controlledTab, currentUserId,
     <div className="max-w-6xl mx-auto space-y-5 text-left select-none">
       {orderError && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{orderError}</div>}
       {orderNotice && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{orderNotice}</div>}
-      {activePickerTab === 'ready' && (
-        <div role="tablist" aria-label="Order queue" className="flex items-center gap-2 border-b border-slate-200">
-          <button type="button" role="tab" aria-selected={queueTab === 'available'} onClick={() => setQueueTab('available')} className={`border-b-2 px-4 py-3 text-sm font-bold ${queueTab === 'available' ? 'border-teal-700 text-teal-800' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
-            Available Orders
-          </button>
-          <button type="button" role="tab" aria-selected={queueTab === 'claimed'} onClick={() => setQueueTab('claimed')} className={`border-b-2 px-4 py-3 text-sm font-bold ${queueTab === 'claimed' ? 'border-teal-700 text-teal-800' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
-            Claimed Orders
-          </button>
-          <span className={`ml-auto text-xs font-bold ${activeClaimCount >= maxActiveClaims ? 'text-rose-700' : 'text-slate-500'}`}>{activeClaimCount}/{maxActiveClaims} active claims</span>
-        </div>
-      )}
       <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm border border-slate-200 rounded-2xl p-4 shadow-xs">
         <div className="relative">
           <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
@@ -501,6 +496,32 @@ export default function Pickers({ activePickerTab: controlledTab, currentUserId,
         </div>
       </div>
 
+      {activePickerTab === 'ready' && (
+        <div role="tablist" aria-label="Order queue" className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-slate-100 p-1.5">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={queueTab === 'available'}
+            onClick={() => setQueueTab('available')}
+            className={`flex min-h-11 items-center justify-center rounded-xl px-3 py-2 text-xs font-black transition sm:text-sm ${queueTab === 'available' ? 'bg-orange-500 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-orange-50 hover:text-orange-800'}`}
+          >
+            Available Orders
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={queueTab === 'claimed'}
+            onClick={() => setQueueTab('claimed')}
+            className={`flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-black transition sm:text-sm ${queueTab === 'claimed' ? 'bg-teal-700 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-teal-50 hover:text-teal-800'}`}
+          >
+            Claimed Orders
+            <span className={`rounded-full px-2 py-0.5 text-[10px] ${queueTab === 'claimed' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+              {activeClaimCount}/{maxActiveClaims}
+            </span>
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-2xl border border-orange-200 bg-orange-50/50 p-4 shadow-sm">
           <div className="flex items-center gap-2 text-orange-600"><ShoppingCart className="w-4 h-4" /><span className="text-[10px] font-black uppercase tracking-wider">Queue Size</span></div>
@@ -529,6 +550,7 @@ export default function Pickers({ activePickerTab: controlledTab, currentUserId,
                       {getPriorityLevel(order)} priority
                     </span>
                     <h3 className="text-base font-black text-slate-900">{order.customerName || 'Customer'}</h3>
+                    {order.requesterRelationship && <p className="text-xs font-semibold text-slate-600">Relationship: {order.requesterRelationship}</p>}
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500">
@@ -582,7 +604,15 @@ export default function Pickers({ activePickerTab: controlledTab, currentUserId,
                       <button type="button" onClick={() => void handleApproveOrder(order.id)} className="rounded-lg border border-teal-200 bg-white px-4 py-2 text-xs font-black text-teal-800 hover:bg-teal-50">Recheck Stock</button>
                     )}
                     {activePickerTab === 'ready' && queueTab === 'available' && (
-                      <button type="button" disabled={activeClaimCount >= maxActiveClaims} onClick={() => void handleClaimOrder(order.id)} className="rounded-lg bg-orange-500 px-4 py-2 text-xs font-black text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-slate-300">Claim Order</button>
+                      <button
+                        type="button"
+                        disabled={claimingOrderId === order.id}
+                        onClick={() => void handleClaimOrder(order.id)}
+                        title={activeClaimCount >= maxActiveClaims ? `You have reached the limit of ${maxActiveClaims} active claims.` : undefined}
+                        className={`rounded-lg px-4 py-2 text-xs font-black text-white transition disabled:cursor-wait disabled:opacity-70 ${activeClaimCount >= maxActiveClaims ? 'cursor-help bg-slate-400 hover:bg-slate-500' : 'bg-orange-500 hover:bg-orange-600'}`}
+                      >
+                        {claimingOrderId === order.id ? 'Claiming...' : activeClaimCount >= maxActiveClaims ? 'Claim limit reached' : 'Claim Order'}
+                      </button>
                     )}
                     {activePickerTab === 'ready' && queueTab === 'claimed' && (
                       <button type="button" onClick={() => handleOpenOrder(order.id)} className="rounded-lg bg-teal-700 px-4 py-2 text-xs font-black text-white hover:bg-teal-800">Continue Picking</button>
