@@ -5,7 +5,8 @@ import { defineConfig } from 'vite';
 
 export default defineConfig(() => {
   return {
-    base: '/UniformEX/',
+    // 👇 EXACT match — case-sensitive!
+    base: '/Uniform-Exchange-Inventory-Management/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

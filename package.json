@@ -14,7 +14,7 @@
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"
   },
-  "homepage": "https://Cal0505.github.io/uniform-ex-inventory-management/",
+  "homepage": "https://Cal0505.github.io/Uniform-Exchange-Inventory-Management/",
   "dependencies": {
     "@capacitor/android": "^8.5.2",
     "@capacitor/cli": "^8.4.1",
